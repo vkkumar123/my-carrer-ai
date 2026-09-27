@@ -62,9 +62,10 @@ docker compose up --build
 
 Open http://localhost:3000 in Chrome or Edge on a laptop or desktop.
 
-The stack uses host ports 3000 (web), 8000 (API), 7880-7882 (LiveKit) and 5433 (Postgres). If
-you get "port is already allocated / address already in use", stop whatever uses that port, or
-for Postgres set `POSTGRES_HOST_PORT` in `.env` to a free port.
+The stack uses host ports 3000 (web), 8010 (API), 5433 (Postgres) and 7880-7882 (LiveKit). If
+you get "port is already allocated" or "address already in use", set `WEB_HOST_PORT`,
+`API_HOST_PORT` or `POSTGRES_HOST_PORT` in `.env` to a free port (LiveKit's ports must stay as
+they are).
 
 ### Option B: run each service
 
