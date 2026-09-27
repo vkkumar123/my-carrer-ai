@@ -1,7 +1,7 @@
 // Copies browser runtimes from node_modules into public/vendor so the app serves them itself
 // instead of depending on a third-party CDN (often blocked on office/college networks).
 // Runs before `dev` and `build`; public/vendor is git-ignored.
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
@@ -23,16 +23,28 @@ const jobs = [
   },
 ];
 
-rmSync(out, { recursive: true, force: true });
+// Plain per-file copies: Node's native recursive cpSync fails on some Docker bind mounts
+// (e.g. Docker Desktop on macOS) with EACCES.
+function copyDir(src, dest, filter) {
+  mkdirSync(dest, { recursive: true });
+  for (const name of readdirSync(src)) {
+    const from = join(src, name);
+    const to = join(dest, name);
+    if (statSync(from).isDirectory()) {
+      if (!filter) copyDir(from, to);
+    } else if (!filter || filter(name)) {
+      copyFileSync(from, to);
+    }
+  }
+}
+
+// Empty the folder rather than deleting it: in Docker it is a mounted volume.
+mkdirSync(out, { recursive: true });
+for (const name of readdirSync(out)) rmSync(join(out, name), { recursive: true, force: true });
+
 for (const { from, to, filter } of jobs) {
   const src = join(nm, from);
   if (!existsSync(src)) throw new Error(`copy-vendor: missing ${src}; run npm install`);
-  const dest = join(out, to);
-  mkdirSync(dest, { recursive: true });
-  if (filter) {
-    for (const f of readdirSync(src).filter(filter)) cpSync(join(src, f), join(dest, f));
-  } else {
-    cpSync(src, dest, { recursive: true });
-  }
+  copyDir(src, join(out, to), filter);
 }
 console.log("copy-vendor: runtimes copied to public/vendor");

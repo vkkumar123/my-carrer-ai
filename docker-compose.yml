@@ -61,7 +61,9 @@ services:
       # Google sign-in (optional locally; see docs/GOOGLE_SIGN_IN.md)
       NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL:-}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
-    volumes: ["./apps/web:/app", "/app/node_modules"]
+    # node_modules and the copied browser runtimes live inside the container, not in your
+    # project folder (faster, and avoids file-sharing permission issues on macOS).
+    volumes: ["./apps/web:/app", "/app/node_modules", "/app/public/vendor"]
     ports: ["${WEB_HOST_PORT:-3000}:3000"]
     depends_on: [api]
 
