@@ -98,6 +98,7 @@ export interface Round {
   plan: { questions: { id: string; prompt: string; what_good_looks_like: string }[] } | null;
   transcript: { role: "interviewer" | "candidate"; text: string }[] | null;
   final_code: string | null;
+  final_whiteboard: string | null;
   evaluation: Evaluation | null;
   integrity: Integrity | null;
 }

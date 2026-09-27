@@ -89,7 +89,12 @@ def evaluate_round(round_id: str) -> None:
         loop = rnd.loop
         resume = db.get(Resume, loop.resume_id) if loop.resume_id else None
         try:
-            ev = tasks.evaluate_round(rnd.plan, turns, rnd.final_code, loop_context(loop, resume))
+            workspace = {
+                "final_code": rnd.final_code,
+                "final_whiteboard": rnd.final_whiteboard,
+                "agent_notes": rnd.agent_notes,
+            }
+            ev = tasks.evaluate_round(rnd.plan, turns, workspace, loop_context(loop, resume))
             rnd.evaluation = ev.model_dump()
             rnd.status = "evaluated"
         except Exception:  # background job: always land in a final state

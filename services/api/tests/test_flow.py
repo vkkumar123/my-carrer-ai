@@ -81,7 +81,14 @@ def test_company_loop_end_to_end(client, auth, fake_llm):
     done = client.post(
         f"/internal/rounds/{round_id}/complete",
         headers=INTERNAL,
-        json={"transcript": transcript, "end_reason": "completed"},
+        json={
+            "transcript": transcript,
+            "end_reason": "completed",
+            "final_code": "SELECT 1",
+            "final_whiteboard": "Box 'orders' -> Box 'customers'",
+            "hints_used": {"q1": 1},
+            "question_notes": {"q1": "Needed a hint on LEFT JOIN"},
+        },
     )
     assert done.status_code == 202
 
@@ -90,6 +97,7 @@ def test_company_loop_end_to_end(client, auth, fake_llm):
     assert rnd["evaluation"]["overall_score"] == 72
     assert rnd["integrity"]["score"] == 87 and rnd["integrity"]["rating"] == "clean"
     assert rnd["plan"] is not None and len(rnd["transcript"]) == 4
+    assert rnd["final_whiteboard"].startswith("Box") and rnd["final_code"] == "SELECT 1"
 
     # finished rounds can't be rejoined; completion is idempotent
     assert client.post(f"/rounds/{round_id}/join", headers=auth).status_code == 409

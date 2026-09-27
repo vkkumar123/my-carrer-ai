@@ -22,11 +22,10 @@ Regions are Mumbai wherever the provider offers it, because voice latency depend
 ## 1. Supabase
 
 1. Create a project in the Mumbai region.
-2. Auth: enable Google sign-in.
+2. Auth: enable Google sign-in (step by step: [GOOGLE_SIGN_IN.md](GOOGLE_SIGN_IN.md)).
 3. Storage: create a private bucket `resumes`, and create S3 access keys (Storage settings).
-4. Note the connection string (use the **pooler** URL for Cloud Run) and the JWT secret. The API
-   currently verifies HS256 tokens signed with that secret; supporting Supabase asymmetric signing
-   keys (JWKS) is a small follow-up.
+4. Note the connection string (use the **pooler** URL for Cloud Run) and the project URL. The
+   API verifies sign-in tokens with the project's public signing keys (JWKS at `SUPABASE_URL`).
 
 ## 2. API on Cloud Run
 
@@ -46,6 +45,7 @@ gcloud run deploy mycareer-api \
   --min-instances 0 --max-instances 10 --memory 1Gi \
   --no-cpu-throttling \
   --set-env-vars ENVIRONMENT=production,AUTH_MODE=supabase,STORAGE_BACKEND=s3,\
+SUPABASE_URL=https://YOUR-PROJECT.supabase.co,\
 CORS_ORIGINS=https://YOUR-DOMAIN,LIVEKIT_URL=wss://YOUR-PROJECT.livekit.cloud,\
 LIVEKIT_API_KEY=YOUR_KEY,LIVEKIT_AGENT_NAME=mycareer-interviewer,\
 S3_BUCKET=resumes,S3_ENDPOINT_URL=https://YOUR-PROJECT.supabase.co/storage/v1/s3,\
@@ -82,7 +82,9 @@ gcloud run jobs execute mycareer-migrate --region asia-south1 --wait
 ## 4. Web on Vercel
 
 1. Import the repo and set the root directory to `apps/web`.
-2. Set `NEXT_PUBLIC_API_URL=https://api.YOUR-DOMAIN` (map a custom domain to Cloud Run).
+2. Set `NEXT_PUBLIC_API_URL=https://api.YOUR-DOMAIN` (map a custom domain to Cloud Run),
+   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
+   `NEXT_PUBLIC_DEV_LOGIN=false`.
 3. Add the domain in Vercel and point DNS at it from Cloudflare.
 
 ## Cost model

@@ -77,6 +77,8 @@ def complete_round(
         return {"status": "pending"}
     rnd.transcript = [t.model_dump() for t in body.transcript]
     rnd.final_code = body.final_code
+    rnd.final_whiteboard = body.final_whiteboard
+    rnd.agent_notes = {"hints_used": body.hints_used, "question_notes": body.question_notes}
     rnd.end_reason = body.end_reason
     rnd.ended_at = datetime.now(UTC)
     rnd.status = "completed"

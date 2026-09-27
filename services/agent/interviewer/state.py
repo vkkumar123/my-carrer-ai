@@ -31,6 +31,9 @@ class InterviewState:
     end_reason: str | None = None
     latest_code: str | None = None
     code_language: str | None = None
+    latest_whiteboard: str | None = None
+    hints_used: dict[str, int] = field(default_factory=dict)
+    notes: dict[str, str] = field(default_factory=dict)
 
     def elapsed_min(self, now: float | None = None) -> float:
         return ((now or time.monotonic()) - self.started_at) / 60
@@ -55,6 +58,8 @@ class InterviewState:
         q = self.current_question
         if q is not None:
             self.completed.append(q["id"])
+            if note:
+                self.notes[q["id"]] = note
             self.current += 1
         nxt = self.current_question
         remaining = max(0, round(self.remaining_min()))
@@ -66,10 +71,56 @@ class InterviewState:
             )
         per_q = remaining / max(1, len(self.questions) - self.current)
         return (
-            f"Next question ({nxt['id']}, {nxt['difficulty']}, topic: {nxt['topic']}). "
-            f"About {per_q:.0f} minutes available for it. Transition naturally, then ask: "
-            f"{nxt['prompt']}"
+            f"The candidate's screen now shows question {self.current + 1} "
+            f"({nxt['id']}, {nxt['difficulty']}, topic: {nxt['topic']}). About {per_q:.0f} "
+            f"minutes available for it. Transition naturally, then ask: {nxt['prompt']}"
         )
+
+    def next_hint(self) -> str:
+        """Next unused hint for the active question (tool result)."""
+        q = self.current_question
+        if q is None:
+            return "There is no active question. Don't give a hint."
+        hints = q.get("hints") or []
+        used = self.hints_used.get(q["id"], 0)
+        if used >= len(hints):
+            return (
+                "No more prepared hints for this question. Give at most a small nudge in your "
+                "own words without revealing the answer, or offer to move on."
+            )
+        self.hints_used[q["id"]] = used + 1
+        return f"Hint {used + 1} of {len(hints)} (say it briefly, in your own words): {hints[used]}"
+
+    def question_payload(self) -> dict[str, Any] | None:
+        """What the candidate's screen shows for the active question."""
+        q = self.current_question
+        if q is None:
+            return None
+        return {
+            "index": self.current,
+            "total": len(self.questions),
+            "id": q["id"],
+            "topic": q.get("topic", ""),
+            "prompt": q.get("prompt", ""),
+            "screen_text": q.get("screen_text", ""),
+            "workspace": q.get("workspace", "none"),
+            "language": q.get("language", ""),
+        }
+
+    def workspace_view(self) -> str:
+        """What the candidate currently has in the editor and on the whiteboard (tool result)."""
+        parts = []
+        if self.latest_code and self.latest_code.strip():
+            parts.append(
+                f"EDITOR ({self.code_language or 'unknown language'}):\n{self.latest_code}"
+            )
+        else:
+            parts.append("EDITOR: empty.")
+        if self.latest_whiteboard and self.latest_whiteboard.strip():
+            parts.append(f"WHITEBOARD:\n{self.latest_whiteboard}")
+        else:
+            parts.append("WHITEBOARD: empty.")
+        return "\n\n".join(parts)
 
     def status_line(self) -> str:
         return (

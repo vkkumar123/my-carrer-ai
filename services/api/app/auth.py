@@ -31,11 +31,29 @@ def issue_dev_token(user: User) -> str:
     return jwt.encode(claims, s.jwt_secret, algorithm="HS256")
 
 
+_jwks_client: jwt.PyJWKClient | None = None
+
+
+def _jwks() -> jwt.PyJWKClient:
+    global _jwks_client
+    if _jwks_client is None:
+        url = get_settings().supabase_url.rstrip("/") + "/auth/v1/.well-known/jwks.json"
+        _jwks_client = jwt.PyJWKClient(url, cache_keys=True, lifespan=3600)
+    return _jwks_client
+
+
 def _decode(token: str) -> dict:
     s = get_settings()
     try:
-        return jwt.decode(token, s.jwt_secret, algorithms=["HS256"], audience=s.jwt_audience)
-    except jwt.PyJWTError as e:
+        alg = jwt.get_unverified_header(token).get("alg")
+        if alg == "HS256":
+            key, algorithms = s.jwt_secret, ["HS256"]
+        elif s.supabase_url and alg in ("ES256", "RS256"):
+            key, algorithms = _jwks().get_signing_key_from_jwt(token).key, [alg]
+        else:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unsupported token")
+        return jwt.decode(token, key, algorithms=algorithms, audience=s.jwt_audience)
+    except (jwt.PyJWTError, jwt.PyJWKClientError) as e:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token") from e
 
 

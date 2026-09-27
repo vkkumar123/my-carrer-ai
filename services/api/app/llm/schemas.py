@@ -61,10 +61,30 @@ RoundType = Literal[
 
 class PlannedQuestion(BaseModel):
     id: str = Field(description="Short id like 'q1'")
-    prompt: str = Field(description="The question exactly as the interviewer will ask it aloud")
     topic: str
     difficulty: Literal["easy", "medium", "hard"]
+    prompt: str = Field(
+        description="What the interviewer SAYS to pose the question: 1-2 short spoken sentences "
+        "with a single ask. Details such as schemas or examples belong in screen_text."
+    )
+    screen_text: str = Field(
+        description="Problem statement shown on the candidate's screen, like a problem pasted "
+        "into a shared pad: context, table schemas (table and column names with types), "
+        "small sample input and expected output, or design requirements and scale. Plain "
+        "text, newlines allowed. Never includes the solution. Empty for conceptual questions."
+    )
+    workspace: Literal["code", "whiteboard", "none"] = Field(
+        description="'code' when the candidate should write code or a query, 'whiteboard' for "
+        "system design, data modelling or architecture, 'none' for purely conceptual talk"
+    )
+    language: str = Field(
+        description="Editor language for code questions, e.g. 'sql', 'python', 'java'; "
+        "empty otherwise"
+    )
     follow_ups: list[str] = Field(description="2-4 probing follow-ups, harder as they go")
+    hints: list[str] = Field(
+        description="2-3 progressive hints, smallest nudge first. Never the full answer."
+    )
     what_good_looks_like: str = Field(description="Key points of a strong answer (never shown)")
 
 

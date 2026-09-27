@@ -1,4 +1,4 @@
-import { clearToken, getToken } from "./auth";
+import { forgetSession, getAccessToken } from "./auth";
 import { API_URL } from "./config";
 import type { JoinInfo, Level, Loop, ProctorEvent, Resume, Round, User } from "./types";
 
@@ -13,13 +13,13 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  const token = getToken();
+  const token = await getAccessToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
   if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
 
   const res = await fetch(`${API_URL}${path}`, { ...init, headers });
   if (res.status === 401) {
-    clearToken();
+    forgetSession();
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
       // Outside React, so no router here; a hard navigation also clears in-memory state.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination

@@ -12,9 +12,12 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://mycareer:mycareer@localhost:5432/mycareer"
 
-    # Auth. "dev" enables the passwordless /auth/dev-login endpoint for local work.
-    # In staging/prod set AUTH_MODE=supabase and JWT_SECRET to the Supabase JWT secret.
+    # Auth. "dev" also enables the passwordless /auth/dev-login endpoint for local work;
+    # use AUTH_MODE=supabase in staging/prod. Supabase tokens are verified either with the
+    # project's signing keys (SUPABASE_URL -> JWKS, for ES256/RS256 tokens) or with its legacy
+    # JWT secret (JWT_SECRET, HS256). Dev-login tokens are always HS256 with JWT_SECRET.
     auth_mode: str = "dev"  # dev | supabase
+    supabase_url: str = ""
     jwt_secret: str = "dev-only-jwt-secret-change-me-in-prod-0123456789"
     jwt_audience: str = "authenticated"
 

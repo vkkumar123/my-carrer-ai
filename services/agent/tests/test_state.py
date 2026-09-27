@@ -1,15 +1,20 @@
-from interviewer.prompts import build_instructions, phase_note
+from interviewer.prompts import build_instructions, greeting, phase_note
 from interviewer.state import InterviewState, Phase, ProctorMonitor
 
 QUESTIONS = [
     {
         "id": "q1",
-        "prompt": "Explain Spark partitions.",
-        "topic": "Spark",
+        "prompt": "Write the query.",
+        "topic": "SQL joins",
         "difficulty": "easy",
+        "screen_text": "orders(order_id, customer_id, amount)",
+        "workspace": "code",
+        "language": "sql",
         "follow_ups": ["Why?"],
-        "what_good_looks_like": "Mentions shuffles",
+        "hints": ["Think LEFT JOIN", "Use COALESCE"],
+        "what_good_looks_like": "LEFT JOIN",
     },
+    # Older plans have no screen/workspace/hint fields; they must still work.
     {
         "id": "q2",
         "prompt": "Design a pipeline.",
@@ -86,7 +91,52 @@ def test_instructions_include_plan_and_hide_nothing_needed():
         "candidate_name": "Asha",
     }
     text = build_instructions(ctx, "Alex")
-    assert "Adobe" in text and "Asha" in text and "Explain Spark partitions." in text
-    assert "next_question" in text and "get_candidate_code" in text
+    assert "Adobe" in text and "Asha" in text and "orders(order_id" in text
+    assert "next_question" in text and "view_candidate_workspace" in text
+    assert "get_hint" in text and "Coding Round 1" in text
     assert phase_note("main", 10) is None
     assert "5 minutes" in phase_note("wrap_up", 5)
+
+
+def test_hints_are_progressive_and_counted():
+    s = make_state()
+    assert "Think LEFT JOIN" in s.next_hint()
+    assert "Use COALESCE" in s.next_hint()
+    assert "No more prepared hints" in s.next_hint()
+    assert s.hints_used == {"q1": 2}
+    s.current = 1
+    assert "No more prepared hints" in s.next_hint()  # question without hints
+
+
+def test_question_payload_and_workspace_view():
+    s = make_state()
+    p = s.question_payload()
+    assert p["screen_text"].startswith("orders(") and p["workspace"] == "code"
+    assert p["language"] == "sql" and p["index"] == 0 and p["total"] == 2
+    assert "EDITOR: empty." in s.workspace_view() and "WHITEBOARD: empty." in s.workspace_view()
+    s.latest_code, s.code_language = "SELECT 1", "sql"
+    s.latest_whiteboard = "Box 'API' -> Box 'DB'"
+    view = s.workspace_view()
+    assert "EDITOR (sql):\nSELECT 1" in view and "Box 'API'" in view
+    s.current = 1
+    assert s.question_payload()["workspace"] == "none"  # old plan defaults
+    s.current = 2
+    assert s.question_payload() is None
+
+
+def test_advance_records_note():
+    s = make_state()
+    s.advance("Needed a hint")
+    assert s.notes == {"q1": "Needed a hint"}
+
+
+def test_greeting_uses_first_name_and_mentions_tools():
+    ctx = {
+        "mode": "topic",
+        "topic": "SQL",
+        "duration_min": 15,
+        "candidate": None,
+        "candidate_name": "Vivek Kumar",
+    }
+    g = greeting(ctx, "Alex")
+    assert g.startswith("Hi Vivek, I'm Alex") and "15 minutes" in g and "whiteboard" in g

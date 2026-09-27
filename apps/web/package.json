@@ -9,9 +9,11 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@livekit/components-react": "^2.9.24",
     "@mediapipe/tasks-vision": "^1.0.1",
     "@monaco-editor/react": "^4.7.0",
+    "@supabase/supabase-js": "^2.117.2",
     "livekit-client": "^2.22.3",
     "next": "16.3.6",
     "react": "19.2.8",

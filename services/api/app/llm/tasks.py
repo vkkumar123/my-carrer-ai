@@ -49,21 +49,32 @@ def build_gap_map(resume: dict[str, Any], jd: dict[str, Any]) -> GapMap:
 
 
 PLANNER_SYSTEM = """You design realistic technical interview loops for an interview-practice \
-platform used by IT professionals and final-year students in India.
+platform used by IT professionals and final-year students in India. A voice interviewer asks \
+the questions; the candidate also has an on-screen problem panel, a code editor (with SQL \
+support) and a whiteboard, exactly like a real video interview with a shared pad.
 
 Rules:
 - Produce exactly the rounds you are asked for, in order, with the given types and durations.
 - Only technical rounds. Never include an HR, salary or culture-fit-only round.
-- Questions must be spoken aloud by a voice interviewer: phrase them conversationally, no \
-markdown, no code blocks, no ASCII diagrams. For coding rounds, describe the problem clearly \
-in words, including one small example input and output.
-- Calibrate difficulty to the seniority level. Start with a warm-up question, then ramp up.
-- Plan roughly one main question per 10-12 minutes of a round (coding: 1-2 problems; system \
-design: 1 problem explored in depth).
+- Make it hands-on, the way real interviewers do: in coding, SQL, data and topic rounds at \
+least half the questions ask the candidate to WRITE a query or code in the editor (or draw \
+on the whiteboard for design and data-modelling questions), then discuss it. Mix in short \
+conceptual questions, but don't make the whole round "explain the logic".
+- `prompt` is what the interviewer says aloud: 1-2 short conversational sentences with ONE \
+ask, e.g. "Write a query that lists every customer with their total order amount, \
+including customers with no orders. The tables are on your screen." Put every extra part of \
+a multi-part question into follow_ups instead.
+- `screen_text` carries the details a candidate would otherwise have to memorise: table \
+schemas with column names and types, a few sample rows with expected output, input/output \
+examples, constraints, or design requirements and scale. Never the solution.
+- Hints go from a small nudge to a bigger one. None of them gives the full answer.
+- Calibrate difficulty to the seniority level. Start with a warm-up, then ramp up.
+- Plan roughly one main question per 8-12 minutes of a round (system design: one problem \
+explored in depth).
 - When a resume is provided, include at least one question per round grounded in the \
 candidate's own projects or claims, and target the probe areas from the gap map.
 - Adapt round content to the role: e.g. a data engineer's coding round can include SQL or \
-Spark, and their design round can be a data pipeline design.
+Spark, and their design round can be a data pipeline or data model design.
 - The rubric should have 3-5 dimensions relevant to the round type."""
 
 
@@ -80,14 +91,18 @@ def plan_loop(context: dict[str, Any], round_specs: list[dict[str, Any]]) -> Int
 
 
 EVALUATOR_SYSTEM = """You are a calibrated, fair senior interviewer writing the debrief for \
-one interview round on a practice platform. You grade only what is in the transcript.
+one interview round on a practice platform. You grade only what is in the transcript and in \
+the candidate's final editor and whiteboard content.
 
 Rules:
 - Score each rubric dimension 1-5 and support every score with short verbatim evidence \
-quotes from the candidate's words. No evidence means you cannot score high.
+quotes from the candidate's words or code. No evidence means you cannot score high.
 - The transcript comes from speech-to-text: ignore transcription glitches and filler words \
-when judging technical content, but do comment on clarity and structure.
-- If the round ended early or the candidate barely spoke, say so and score accordingly.
+when judging technical content (e.g. "city" is usually "CTE"), but do comment on clarity \
+and structure.
+- Account for hints: solving with no hints is stronger than solving after several hints. \
+Mention hints in the relevant question feedback.
+- If the round ended early or the candidate skipped questions, say so and score accordingly.
 - Be direct and specific, like a good mentor. Feedback must be actionable.
 - overall_score is 0-100 and must be consistent with the dimension scores and verdict \
 (roughly: strong_hire >= 85, hire 70-84, lean_hire 60-69, lean_no_hire 45-59, no_hire < 45).
@@ -97,16 +112,24 @@ when judging technical content, but do comment on clarity and structure.
 def evaluate_round(
     round_plan: dict[str, Any],
     transcript: list[dict[str, Any]],
-    final_code: str | None,
+    workspace: dict[str, Any],
     context: dict[str, Any],
 ) -> Evaluation:
+    """`workspace` holds final_code, final_whiteboard and the interviewer's notes."""
     lines = "\n".join(f"[{t.get('role', '?').upper()}] {t.get('text', '')}" for t in transcript)
-    code_part = f"\n\n<final_code>\n{final_code}\n</final_code>" if final_code else ""
+    extra = ""
+    if workspace.get("final_code"):
+        extra += f"\n\n<final_code>\n{workspace['final_code']}\n</final_code>"
+    if workspace.get("final_whiteboard"):
+        extra += f"\n\n<final_whiteboard>\n{workspace['final_whiteboard']}\n</final_whiteboard>"
+    if workspace.get("agent_notes"):
+        notes = json.dumps(workspace["agent_notes"], indent=1)
+        extra += f"\n\n<interviewer_notes>\n{notes}\n</interviewer_notes>"
     return structured(
         system=EVALUATOR_SYSTEM,
         user=f"<context>\n{json.dumps(context, indent=1)}\n</context>\n\n"
         f"<round_plan>\n{json.dumps(round_plan, indent=1)}\n</round_plan>\n\n"
-        f"<transcript>\n{lines}\n</transcript>{code_part}\n\nWrite the debrief.",
+        f"<transcript>\n{lines}\n</transcript>{extra}\n\nWrite the debrief.",
         schema=Evaluation,
         effort="high",
         max_tokens=32000,

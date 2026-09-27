@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { clearToken } from "@/lib/auth";
+import { signOut } from "@/lib/auth";
 import { APP_NAME } from "@/lib/config";
 
 export function Nav() {
@@ -22,8 +22,8 @@ export function Nav() {
             New interview
           </Link>
           <button
-            onClick={() => {
-              clearToken();
+            onClick={async () => {
+              await signOut();
               router.push("/login");
             }}
             className="rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-100"

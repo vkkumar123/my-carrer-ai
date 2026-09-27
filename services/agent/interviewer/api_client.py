@@ -26,9 +26,23 @@ async def fetch_round_context(round_id: str) -> dict[str, Any]:
 
 
 async def complete_round(
-    round_id: str, transcript: list[dict[str, Any]], final_code: str | None, end_reason: str
+    round_id: str,
+    *,
+    transcript: list[dict[str, Any]],
+    final_code: str | None,
+    final_whiteboard: str | None,
+    hints_used: dict[str, int],
+    question_notes: dict[str, str],
+    end_reason: str,
 ) -> None:
-    payload = {"transcript": transcript, "final_code": final_code, "end_reason": end_reason}
+    payload = {
+        "transcript": transcript,
+        "final_code": final_code,
+        "final_whiteboard": final_whiteboard,
+        "hints_used": hints_used,
+        "question_notes": question_notes,
+        "end_reason": end_reason,
+    }
     # Runs during job shutdown, which has a ~10s budget: keep retries short.
     for attempt in range(3):
         try:

@@ -8,17 +8,20 @@ const Monaco = dynamic(() => import("@monaco-editor/react"), {
   loading: () => <div className="p-4 text-sm text-slate-400">Loading editor...</div>,
 });
 
-const LANGUAGES = ["python", "java", "cpp", "javascript", "typescript", "go", "sql", "scala"];
+export const LANGUAGES = ["sql", "python", "java", "cpp", "javascript", "typescript", "go", "scala"];
 
 /** Shared editor. Code is streamed to the interviewer (debounced); pasting is blocked. */
 export function CodeEditor({
+  language,
+  onLanguageChange,
   onChange,
   onPasteBlocked,
 }: {
+  language: string;
+  onLanguageChange: (language: string) => void;
   onChange: (code: string, language: string) => void;
   onPasteBlocked: () => void;
 }) {
-  const [language, setLanguage] = useState("python");
   const [code, setCode] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -45,12 +48,12 @@ export function CodeEditor({
   }, [onPasteBlocked]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl bg-[#1e1e1e] ring-1 ring-slate-700">
-      <div className="flex items-center justify-between border-b border-slate-700 px-3 py-2">
-        <span className="text-xs text-slate-400">Shared with your interviewer · paste disabled</span>
+    <div className="flex h-full flex-col bg-[#1e1e1e]">
+      <div className="flex items-center justify-between border-b border-slate-700 px-3 py-1.5">
+        <span className="text-xs text-slate-400">Your interviewer sees this live · paste disabled</span>
         <select
           value={language}
-          onChange={(e) => setLanguage(e.target.value)}
+          onChange={(e) => onLanguageChange(e.target.value)}
           className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-200"
         >
           {LANGUAGES.map((l) => (

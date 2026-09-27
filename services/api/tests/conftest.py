@@ -48,11 +48,15 @@ def fake_round(rtype: str, title: str, minutes: int) -> s.RoundPlan:
         questions=[
             s.PlannedQuestion(
                 id="q1",
-                prompt="Tell me about your most recent project.",
-                topic="projects",
+                prompt="Write a query listing each customer's total order amount.",
+                topic="SQL joins",
                 difficulty="easy",
-                follow_ups=["Why that design?"],
-                what_good_looks_like="Clear ownership and trade-offs",
+                screen_text="orders(order_id INT, customer_id INT, amount DECIMAL)",
+                workspace="code",
+                language="sql",
+                follow_ups=["What changes with a LEFT JOIN?"],
+                hints=["Which join keeps customers without orders?"],
+                what_good_looks_like="LEFT JOIN + COALESCE(SUM(amount), 0)",
             )
         ],
         rubric=[s.RubricItem(dimension="Problem solving", weight=3, description="Optimal")],

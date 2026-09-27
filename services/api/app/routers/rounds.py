@@ -32,6 +32,7 @@ def round_out(r: Round) -> RoundOut:
         plan=r.plan if finished else None,
         transcript=r.transcript if finished else None,
         final_code=r.final_code if finished else None,
+        final_whiteboard=r.final_whiteboard if finished else None,
         evaluation=r.evaluation,
         integrity=r.integrity,
     )

@@ -85,6 +85,9 @@ class Round(Base):
     end_reason: Mapped[str | None] = mapped_column(String(100))
     transcript: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)
     final_code: Mapped[str | None] = mapped_column(Text)
+    final_whiteboard: Mapped[str | None] = mapped_column(Text)
+    # From the interviewer: hints given and a one-line note per question.
+    agent_notes: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     evaluation: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     integrity: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 

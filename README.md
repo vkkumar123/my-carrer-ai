@@ -52,6 +52,7 @@ Report page               ◀─REST───  scores, evidence, study plan, int
 ## Run locally
 
 You need API keys for **Anthropic** (Claude) and **Deepgram** (speech-to-text and text-to-speech).
+Google sign-in is optional locally; see [docs/GOOGLE_SIGN_IN.md](docs/GOOGLE_SIGN_IN.md).
 
 ### Option A: Docker Compose
 
@@ -110,8 +111,10 @@ cleanly to Postgres (`.github/workflows/ci.yml`).
 
 ## Status
 
-MVP in progress. Built so far: resume + JD analysis, company and topic loops, voice interviewer with
-timekeeping, proctoring lobby and live monitoring, evaluation reports with an integrity score.
+MVP in progress. Built so far: Google sign-in (Supabase), resume + JD analysis, company and
+topic loops, voice interviewer with timekeeping and progressive hints, on-screen problem
+statements, a live code editor and whiteboard the interviewer can read, proctoring lobby and
+live monitoring, and evaluation reports with an integrity score.
 
-Next up: Supabase Google sign-in (the web app currently uses a development login), payments
-(Razorpay), code execution for coding rounds (Judge0), and deployment to staging.
+Next up: payments (Razorpay), code execution for coding rounds (Judge0), and deployment to
+staging.

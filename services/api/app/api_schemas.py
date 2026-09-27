@@ -92,6 +92,7 @@ class RoundOut(BaseModel):
     plan: dict[str, Any] | None = None
     transcript: list[dict[str, Any]] | None = None
     final_code: str | None = None
+    final_whiteboard: str | None = None
     evaluation: dict[str, Any] | None = None
     integrity: dict[str, Any] | None = None
 
@@ -142,4 +143,7 @@ class TranscriptTurn(BaseModel):
 class RoundCompleteIn(BaseModel):
     transcript: list[TranscriptTurn]
     final_code: str | None = Field(default=None, max_length=50_000)
+    final_whiteboard: str | None = Field(default=None, max_length=20_000)
+    hints_used: dict[str, int] = Field(default_factory=dict)
+    question_notes: dict[str, str] = Field(default_factory=dict)
     end_reason: str = "completed"

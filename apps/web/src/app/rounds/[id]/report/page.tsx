@@ -246,7 +246,18 @@ export default function ReportPage() {
             </div>
           )}
           {showTranscript && round.final_code && (
-            <pre className="mt-4 overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100">{round.final_code}</pre>
+            <>
+              <p className="mt-4 text-sm font-medium">Your final code</p>
+              <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100">{round.final_code}</pre>
+            </>
+          )}
+          {showTranscript && round.final_whiteboard && (
+            <>
+              <p className="mt-4 text-sm font-medium">Your whiteboard (as the interviewer read it)</p>
+              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-slate-100 p-4 text-xs text-slate-800">
+                {round.final_whiteboard}
+              </pre>
+            </>
           )}
         </Card>
       )}
