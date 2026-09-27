@@ -7,7 +7,9 @@ services:
       POSTGRES_USER: mycareer
       POSTGRES_PASSWORD: mycareer
       POSTGRES_DB: mycareer
-    ports: ["5432:5432"]
+    # Host port 5433 so it doesn't clash with a locally installed Postgres on 5432.
+    # Containers still reach it at postgres:5432. Override with POSTGRES_HOST_PORT.
+    ports: ["${POSTGRES_HOST_PORT:-5433}:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mycareer"]

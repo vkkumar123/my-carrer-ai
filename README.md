@@ -62,6 +62,10 @@ docker compose up --build
 
 Open http://localhost:3000 in Chrome or Edge on a laptop or desktop.
 
+The stack uses host ports 3000 (web), 8000 (API), 7880-7882 (LiveKit) and 5433 (Postgres). If
+you get "port is already allocated / address already in use", stop whatever uses that port, or
+for Postgres set `POSTGRES_HOST_PORT` in `.env` to a free port.
+
 ### Option B: run each service
 
 Prerequisites: Python 3.11+, [uv](https://docs.astral.sh/uv/), Node 22, Postgres 16, and
