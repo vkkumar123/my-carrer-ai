@@ -20,7 +20,9 @@ services:
 
   livekit:
     image: livekit/livekit-server:latest
-    command: --dev --bind 0.0.0.0
+    # Advertise 127.0.0.1 for audio: your browser reaches it through the published ports
+    # (the container's own IP isn't reachable from the host on Docker Desktop for Mac/Windows).
+    command: --dev --bind 0.0.0.0 --node-ip 127.0.0.1
     ports: ["7880:7880", "7881:7881", "7882:7882/udp"]
 
   api:
@@ -41,8 +43,11 @@ services:
   agent:
     build: ./services/agent
     env_file: [./services/agent/.env.example]
+    # Shares LiveKit's network, so 127.0.0.1 (the address LiveKit advertises) works for the
+    # interviewer as well. Other services are still reachable by name (api).
+    network_mode: "service:livekit"
     environment:
-      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_URL: ws://localhost:7880
       API_BASE_URL: http://api:8000
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       SARVAM_API_KEY: ${SARVAM_API_KEY:-}
