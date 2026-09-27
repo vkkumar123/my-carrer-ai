@@ -1,0 +1,10 @@
+name: Flipkart
+aliases: []
+persona:
+  style: Direct and fast. Machine-coding mindset, cares about working, extensible code.
+  pace: brisk
+rounds:
+  - {type: low_level_design, title: "Machine Coding / Low Level Design", duration_min: 90}
+  - {type: coding, title: "Problem Solving & Data Structures", duration_min: 60}
+  - {type: system_design, title: "System Design", duration_min: 60, senior_only: true}
+  - {type: hiring_manager, title: "Hiring Manager Round", duration_min: 45}

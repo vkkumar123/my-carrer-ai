@@ -1,0 +1,15 @@
+# Used when the target company has no blueprint of its own.
+generic:
+  persona:
+    style: Professional and friendly. Asks clarifying follow-ups and expects you to reason aloud.
+    pace: moderate
+  rounds:
+    - {type: coding, title: "Coding Round", duration_min: 45}
+    - {type: tech_deep_dive, title: "Technical Deep Dive - Role Skills & Projects", duration_min: 45}
+    - {type: system_design, title: "System Design", duration_min: 60, senior_only: true}
+    - {type: low_level_design, title: "Low Level Design", duration_min: 45, junior_only: true}
+    - {type: hiring_manager, title: "Hiring Manager - Technical Discussion", duration_min: 45}
+topic:
+  persona:
+    style: Expert practitioner in the topic. Starts with fundamentals, then goes deep with scenario questions.
+    pace: moderate

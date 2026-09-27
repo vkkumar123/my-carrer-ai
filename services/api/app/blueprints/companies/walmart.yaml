@@ -1,0 +1,10 @@
+name: Walmart Global Tech
+aliases: [walmart, walmart labs]
+persona:
+  style: Balanced. Mixes DSA with practical questions about your stack and past projects.
+  pace: moderate
+rounds:
+  - {type: coding, title: "Data Structures & Algorithms", duration_min: 60}
+  - {type: tech_deep_dive, title: "Technical Deep Dive - Your Stack & Projects", duration_min: 60}
+  - {type: system_design, title: "System Design", duration_min: 60}
+  - {type: hiring_manager, title: "Hiring Manager Round", duration_min: 45}

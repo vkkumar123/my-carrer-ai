@@ -1,0 +1,10 @@
+name: Uber
+aliases: []
+persona:
+  style: Sharp and scale-focused. Probes edge cases, concurrency and real-world constraints.
+  pace: brisk
+rounds:
+  - {type: coding, title: "Coding - Algorithms", duration_min: 60}
+  - {type: low_level_design, title: "Depth in Specialisation / Machine Coding", duration_min: 60}
+  - {type: system_design, title: "System Design", duration_min: 60}
+  - {type: hiring_manager, title: "Hiring Manager - Collaboration & Technical Ownership", duration_min: 45}

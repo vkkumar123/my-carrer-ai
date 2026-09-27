@@ -1,0 +1,10 @@
+name: Microsoft
+aliases: [msft]
+persona:
+  style: Conversational. Mixes coding with discussion about your projects and design choices.
+  pace: moderate
+rounds:
+  - {type: coding, title: "Coding Round 1", duration_min: 45}
+  - {type: coding, title: "Coding Round 2", duration_min: 45}
+  - {type: system_design, title: "Design Round", duration_min: 60}
+  - {type: hiring_manager, title: "AA / Hiring Manager - Technical Discussion", duration_min: 45}

@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, staging]
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: services/api}}
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: {POSTGRES_USER: mycareer, POSTGRES_PASSWORD: mycareer, POSTGRES_DB: mycareer}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mycareer" --health-interval 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff check . && uv run ruff format --check .
+      - name: Migrations apply cleanly on Postgres
+        env: {DATABASE_URL: "postgresql+psycopg://mycareer:mycareer@localhost:5432/mycareer"}
+        run: uv run alembic upgrade head && uv run alembic check
+      - run: uv run pytest -q
+
+  agent:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: services/agent}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff check . && uv run ruff format --check .
+      - run: uv run pytest -q
+
+  web:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: apps/web}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm, cache-dependency-path: apps/web/package-lock.json}
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm run build

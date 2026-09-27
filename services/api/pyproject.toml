@@ -1,0 +1,34 @@
+[project]
+name = "mycareer-api"
+version = "0.1.0"
+description = "My Career AI - backend API (profiles, interview planning, evaluation)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic[email]>=2.8",
+    "pydantic-settings>=2.4",
+    "sqlalchemy>=2.0.30",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.2",
+    "anthropic>=1.8,<2",
+    "livekit-api>=1.0",
+    "pyjwt>=2.9",
+    "pypdf>=5.0",
+    "python-multipart>=0.0.9",
+    "pyyaml>=6.0",
+    "boto3>=1.35",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,8 @@
+name: TCS
+aliases: [tata consultancy services, tcs digital, tcs ninja]
+persona:
+  style: Polite and fundamentals-focused. Asks about core CS concepts, your projects and the stack on your resume.
+  pace: relaxed
+rounds:
+  - {type: coding, title: "Coding & Programming Fundamentals", duration_min: 45}
+  - {type: tech_deep_dive, title: "Technical Interview - CS Fundamentals & Projects", duration_min: 45}

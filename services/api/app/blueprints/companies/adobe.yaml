@@ -1,0 +1,11 @@
+name: Adobe
+aliases: [adobe systems, adobe inc]
+persona:
+  style: Friendly but thorough. Likes clean code and asks why you chose a data structure.
+  pace: moderate
+rounds:
+  - {type: coding, title: "Coding Round 1 - Data Structures & Algorithms", duration_min: 45}
+  - {type: coding, title: "Coding Round 2 - Problem Solving", duration_min: 45}
+  - {type: system_design, title: "System Design", duration_min: 60, senior_only: true}
+  - {type: low_level_design, title: "Low Level Design", duration_min: 45, junior_only: true}
+  - {type: hiring_manager, title: "Hiring Manager - Technical Deep Dive", duration_min: 45}

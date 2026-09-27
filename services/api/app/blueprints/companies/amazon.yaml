@@ -1,0 +1,14 @@
+name: Amazon
+aliases: [aws, amazon web services]
+persona:
+  style: >-
+    Structured and data-driven. Weaves Leadership Principles into every round, asking for
+    specific examples ("tell me about a time...") with measurable results, and pushes on
+    "what would you do differently".
+  pace: brisk
+rounds:
+  - {type: coding, title: "Coding - Data Structures & Algorithms", duration_min: 60}
+  - {type: coding, title: "Coding - Problem Solving + Leadership Principles", duration_min: 60}
+  - {type: system_design, title: "System Design", duration_min: 60, senior_only: true}
+  - {type: low_level_design, title: "Object-Oriented Design", duration_min: 60, junior_only: true}
+  - {type: hiring_manager, title: "Bar Raiser - Technical + Leadership Principles", duration_min: 60}

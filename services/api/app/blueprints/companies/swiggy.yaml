@@ -1,0 +1,10 @@
+name: Swiggy
+aliases: []
+persona:
+  style: Startup-style and practical. Likes trade-off discussions grounded in real systems.
+  pace: brisk
+rounds:
+  - {type: coding, title: "Problem Solving", duration_min: 60}
+  - {type: low_level_design, title: "Machine Coding / LLD", duration_min: 90}
+  - {type: system_design, title: "High Level Design", duration_min: 60, senior_only: true}
+  - {type: hiring_manager, title: "Hiring Manager Round", duration_min: 45}
