@@ -54,6 +54,7 @@ export interface Loop {
   status: "planning" | "ready" | "failed";
   gap_map: GapMap | null;
   disclaimer: string | null;
+  research_sources: { url: string; title: string }[];
   created_at: string;
   rounds: RoundSummary[];
 }

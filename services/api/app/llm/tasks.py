@@ -3,6 +3,8 @@
 import json
 from typing import Any
 
+from pydantic import BaseModel
+
 from app.llm.client import structured
 from app.llm.schemas import Evaluation, GapMap, InterviewPlan, JDProfile, ResumeProfile
 
@@ -68,9 +70,17 @@ a multi-part question into follow_ups instead.
 schemas with column names and types, a few sample rows with expected output, input/output \
 examples, constraints, or design requirements and scale. Never the solution.
 - Hints go from a small nudge to a bigger one. None of them gives the full answer.
+- SQL questions: the candidate can RUN queries against sample tables. Put DuckDB-compatible \
+CREATE TABLE and INSERT statements in `setup_sql`, matching the schema in screen_text, with \
+5-12 realistic rows that exercise edge cases (NULLs, ties, customers without orders, \
+duplicates). Use standard types (INTEGER, VARCHAR, DATE, TIMESTAMP, DECIMAL(10,2)).
+- Coding questions are asked "approach first": the prompt asks the candidate to explain \
+their approach before writing code; the first follow-up asks them to implement it.
+- When public_interview_reports are provided, match their question style, topics and \
+difficulty for this company, without copying reported questions verbatim.
 - Calibrate difficulty to the seniority level. Start with a warm-up, then ramp up.
-- Plan roughly one main question per 8-12 minutes of a round (system design: one problem \
-explored in depth).
+- Plan roughly one main question per 10-15 minutes of a round (system design: one problem \
+explored in depth). Rounds last 45-60 minutes, like real interviews.
 - When a resume is provided, include at least one question per round grounded in the \
 candidate's own projects or claims, and target the probe areas from the gap map.
 - Adapt round content to the role: e.g. a data engineer's coding round can include SQL or \
@@ -102,11 +112,31 @@ when judging technical content (e.g. "city" is usually "CTE"), but do comment on
 and structure.
 - Account for hints: solving with no hints is stronger than solving after several hints. \
 Mention hints in the relevant question feedback.
-- If the round ended early or the candidate skipped questions, say so and score accordingly.
+- If the round ended early or the candidate skipped questions, say so and score accordingly. \
+The end reason is in the interviewer notes: "candidate_struggling" means the interviewer \
+ended early because the candidate couldn't progress; "integrity" means it was ended after \
+repeated integrity warnings, which you must state plainly in the summary.
+- Coding: credit a clear approach explained before coding, and working code the candidate \
+ran (run results are in the interviewer notes).
 - Be direct and specific, like a good mentor. Feedback must be actionable.
 - overall_score is 0-100 and must be consistent with the dimension scores and verdict \
 (roughly: strong_hire >= 85, hire 70-84, lean_hire 60-69, lean_no_hire 45-59, no_hire < 45).
 - The study plan should be 3-6 concrete items targeting the weakest areas."""
+
+
+class _FixedSQL(BaseModel):
+    setup_sql: str
+
+
+def fix_setup_sql(schema_text: str, setup_sql: str, error: str) -> str:
+    return structured(
+        system="You fix DuckDB SQL scripts that create and populate sample tables.",
+        user=f"<schema>\n{schema_text}\n</schema>\n\n<script>\n{setup_sql}\n</script>\n\n"
+        f"DuckDB error: {error}\n\nReturn a corrected script that creates these tables and "
+        "inserts the same sample rows.",
+        schema=_FixedSQL,
+        effort="low",
+    ).setup_sql
 
 
 def evaluate_round(

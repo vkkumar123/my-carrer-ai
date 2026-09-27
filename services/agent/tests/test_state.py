@@ -1,5 +1,5 @@
 from interviewer.prompts import build_instructions, greeting, phase_note
-from interviewer.state import InterviewState, Phase, ProctorMonitor
+from interviewer.state import InterviewState, Phase, ProctorMonitor, speaks_hindi
 
 QUESTIONS = [
     {
@@ -58,20 +58,71 @@ def test_advance_walks_questions_then_wraps(monkeypatch):
 def test_proctor_warns_only_on_repeats_and_respects_cooldown():
     m = ProctorMonitor()
     assert m.handle("tab_hidden", now=0) is None
-    assert "switched away" in m.handle("tab_hidden", now=10)
+    a = m.handle("tab_hidden", now=10)
+    assert a.kind == "say" and "switched away" in a.text and "final warning" not in a.text
     assert m.handle("tab_hidden", now=20) is None
     assert m.handle("tab_hidden", now=30) is None  # cooldown
     assert m.handle("unknown_event", now=40) is None
 
 
+def test_proctor_escalates_warning_final_warning_then_end():
+    m = ProctorMonitor()
+    t = 0.0
+    kinds = []
+    for _ in range(3):
+        m.handle("tab_hidden", now=t)
+        action = m.handle("tab_hidden", now=t + 1)
+        kinds.append((action.kind, "final warning" in action.text))
+        t += 200  # past the cooldown
+    assert kinds == [("say", False), ("say", True), ("end", False)]
+    assert m.terminated_for == "tab_hidden"
+    assert m.handle("tab_hidden", now=t) is None  # nothing after the end
+
+
 def test_proctor_pauses_on_critical_until_resumed():
     m = ProctorMonitor()
-    assert "screen" in m.handle("screen_share_stopped", now=0)
-    assert m.paused_for == "screen_share_stopped"
-    assert m.handle("screen_share_stopped", now=5) is None  # no repeats
-    assert "continue" in m.handle("resumed", now=30)
-    assert m.paused_for is None
-    assert m.handle("resumed", now=31) is None
+    a = m.handle("screen_share_stopped", now=0)
+    assert (
+        a.kind == "pause" and "screen" in a.text and m.strikes == 0
+    )  # first one may be an accident
+    assert m.handle("screen_share_stopped", now=5) is None  # no repeats while paused
+    assert "continue" in m.handle("resumed", now=30).text
+    assert m.paused_for is None and m.handle("resumed", now=31) is None
+    again = m.handle("screen_share_stopped", now=60)
+    assert again.kind == "pause" and m.strikes == 1  # repeat counts
+
+
+def test_second_person_on_camera_is_a_strike_immediately():
+    m = ProctorMonitor()
+    assert m.handle("multiple_faces", now=0).kind == "pause" and m.strikes == 1
+    m.handle("resumed", now=10)
+    second = m.handle("multiple_faces", now=20)
+    assert second.kind == "pause" and "final warning" in second.text
+    m.handle("resumed", now=30)
+    assert m.handle("multiple_faces", now=40).kind == "end"
+
+
+def test_early_end_needs_enough_time():
+    s = make_state(60)
+    assert not s.can_end_early(now=10 * 60)
+    assert s.can_end_early(now=26 * 60)
+    short = make_state(15)
+    assert not short.can_end_early(now=5 * 60) and short.can_end_early(now=8 * 60)
+
+
+def test_detects_hindi_turns():
+    assert speaks_hindi("मुझे लगता है कि LEFT JOIN use करना चाहिए")
+    assert not speaks_hindi("I would use a LEFT JOIN here")
+    assert not speaks_hindi("")
+
+
+def test_workspace_view_includes_last_run():
+    s = make_state()
+    s.last_run = {"language": "sql", "output": "", "error": "Binder Error: column x"}
+    assert "LAST RUN (sql, failed):\nBinder Error" in s.workspace_view()
+    s.last_run = {"language": "sql", "output": "id | total\n1 | 10", "error": None}
+    assert "succeeded" in s.workspace_view() and "1 | 10" in s.workspace_view()
+    assert "setup_sql" in s.question_payload()
 
 
 def test_instructions_include_plan_and_hide_nothing_needed():

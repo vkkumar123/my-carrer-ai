@@ -40,20 +40,28 @@ from livekit.agents import (
     llm,
 )
 from livekit.agents.voice.room_io import RoomOptions
-from livekit.plugins import anthropic, deepgram, silero
+from livekit.plugins import anthropic, deepgram, sarvam, silero
 
 from interviewer import api_client
 from interviewer.prompts import build_instructions, greeting, phase_note
-from interviewer.state import InterviewState, Phase, ProctorMonitor
+from interviewer.state import InterviewState, Phase, ProctorMonitor, speaks_hindi
 
 load_dotenv()
 log = logging.getLogger("interviewer")
 
 LLM_MODEL = os.environ.get("LLM_MODEL_FAST", "claude-haiku-4-5")
-STT_MODEL = os.environ.get("DEEPGRAM_STT_MODEL", "nova-3")
-STT_LANGUAGE = os.environ.get("DEEPGRAM_STT_LANGUAGE", "en")
-TTS_MODEL = os.environ.get("DEEPGRAM_TTS_MODEL", "aura-2-andromeda-en")
-INTERVIEWER_NAME = os.environ.get("INTERVIEWER_NAME", "Alex")
+# sarvam: Indian-accent voices, understands Hindi, English and Hinglish (default).
+# deepgram: US/UK voices, English only.
+VOICE_PROVIDER = os.environ.get("VOICE_PROVIDER", "sarvam")
+SARVAM_STT_MODEL = os.environ.get("SARVAM_STT_MODEL", "saaras:v3")
+SARVAM_TTS_MODEL = os.environ.get("SARVAM_TTS_MODEL", "bulbul:v3")
+DEEPGRAM_STT_MODEL = os.environ.get("DEEPGRAM_STT_MODEL", "nova-3")
+
+# The candidate picks the interviewer's voice in the lobby; the name matches the voice.
+VOICES = {
+    "female": {"name": "Priya", "sarvam": "priya", "deepgram": "aura-2-andromeda-en"},
+    "male": {"name": "Rahul", "sarvam": "rahul", "deepgram": "aura-2-orion-en"},
+}
 HARD_STOP_GRACE_S = 90
 QUIET_WORK_TYPES = {"coding", "low_level_design", "system_design"}
 
@@ -89,18 +97,28 @@ BASE_KEYTERMS = [
 
 
 class Interviewer(Agent):
-    def __init__(self, ctx_data: dict[str, Any], state: InterviewState, job: JobContext) -> None:
-        self._base_instructions = build_instructions(ctx_data, INTERVIEWER_NAME)
+    def __init__(
+        self,
+        ctx_data: dict[str, Any],
+        state: InterviewState,
+        job: JobContext,
+        name: str,
+        tts: Any,
+    ) -> None:
+        self._base_instructions = build_instructions(ctx_data, name)
         super().__init__(instructions=self._base_instructions)
         self.ctx_data = ctx_data
         self.state = state
         self.proctor = ProctorMonitor()
+        self.name = name
         self._job = job
+        self._tts = tts
+        self._tts_language = "en-IN"
 
     async def on_enter(self) -> None:
         # Speak a fixed greeting straight away instead of waiting for the LLM, then show the
         # first question and let the LLM pose it.
-        self.session.say(greeting(self.ctx_data, INTERVIEWER_NAME), allow_interruptions=False)
+        self.session.say(greeting(self.ctx_data, self.name), allow_interruptions=False)
         await publish_question(self._job.room, self.state)
         self.session.generate_reply(
             instructions="Now ask the first planned question using its prompt. Keep it short; "
@@ -111,8 +129,14 @@ class Interviewer(Agent):
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ) -> None:
         # While paused for a proctoring issue, don't carry on the interview.
-        if self.proctor.paused_for is not None:
+        if self.proctor.paused_for is not None or self.state.ended:
             raise StopResponse()
+        # Follow the candidate's language: Sarvam's voice needs to know Hindi vs English.
+        if isinstance(self._tts, sarvam.TTS):
+            wanted = "hi-IN" if speaks_hindi(new_message.text_content or "") else "en-IN"
+            if wanted != self._tts_language:
+                self._tts.update_options(target_language_code=wanted)
+                self._tts_language = wanted
 
     def apply_phase(self, phase: Phase) -> None:
         note = phase_note(phase.value, self.state.remaining_min())
@@ -143,15 +167,28 @@ class Interviewer(Agent):
         return self.state.next_hint()
 
     @function_tool
-    async def end_interview(self, context: RunContext, reason: str) -> None:
+    async def end_interview(self, context: RunContext, reason: str) -> str | None:
         """End the interview. Call only after you have said goodbye to the candidate.
 
         Args:
-            reason: Why it ended, e.g. "completed", "candidate_requested", "time_up".
+            reason: One of "completed", "candidate_requested", "candidate_struggling",
+                "time_up".
         """
+        if reason == "candidate_struggling" and not self.state.can_end_early():
+            return (
+                "Too early to end: keep going. Try an easier question or offer a hint, and "
+                "don't tell the candidate you were about to end."
+            )
+        await self.finish(reason, context)
+        return None
+
+    async def finish(self, reason: str, context: RunContext | None = None) -> None:
+        if self.state.ended:
+            return
         self.state.ended = True
         self.state.end_reason = reason
-        await context.wait_for_playout()
+        if context is not None:
+            await context.wait_for_playout()
         self._job.shutdown(reason=f"interview ended: {reason}")
 
 
@@ -218,24 +255,20 @@ async def entrypoint(ctx: JobContext) -> None:
         questions=ctx_data["plan"]["questions"], duration_min=ctx_data["duration_min"]
     )
     transcript: list[dict[str, Any]] = []
-    keyterms = _keyterms(ctx_data)
+    voice = VOICES.get(ctx_data.get("voice") or "female", VOICES["female"])
+    tts = _make_tts(voice)
 
     session = AgentSession(
         vad=ctx.proc.userdata["vad"],
-        stt=deepgram.STT(
-            model=STT_MODEL,
-            language=STT_LANGUAGE,
-            smart_format=True,
-            **({"keyterm": keyterms} if keyterms and STT_MODEL.startswith("nova-3") else {}),
-        ),
+        stt=_make_stt(ctx_data),
         llm=anthropic.LLM(model=LLM_MODEL, caching="ephemeral", max_tokens=400),
-        tts=deepgram.TTS(model=TTS_MODEL),
+        tts=tts,
         turn_handling=_turn_handling(),
         # Silence is normal while writing code or drawing; check in later there.
         user_away_timeout=60.0 if ctx_data["type"] in QUIET_WORK_TYPES else 30.0,
         max_tool_steps=4,
     )
-    agent = Interviewer(ctx_data, state, ctx)
+    agent = Interviewer(ctx_data, state, ctx, name=voice["name"], tts=tts)
 
     @session.on("conversation_item_added")
     def _on_item(ev: ConversationItemAddedEvent) -> None:
@@ -267,13 +300,26 @@ async def entrypoint(ctx: JobContext) -> None:
             state.code_language = data.get("language")
         elif packet.topic == "whiteboard":
             state.latest_whiteboard = str(data.get("summary", ""))[:20_000]
+        elif packet.topic == "run":
+            state.last_run = {
+                "language": str(data.get("language", "")),
+                "output": str(data.get("output", ""))[:4000],
+                "error": str(data.get("error") or "")[:2000] or None,
+            }
         elif packet.topic == "sync":
             asyncio.create_task(publish_question(ctx.room, state))
         elif packet.topic == "proctor" and not state.ended:
-            line = agent.proctor.handle(str(data.get("type", "")))
-            if line:
-                session.interrupt()
-                session.say(line, allow_interruptions=False)
+            action = agent.proctor.handle(str(data.get("type", "")))
+            if action is None:
+                return
+            session.interrupt()
+            handle = session.say(action.text, allow_interruptions=False)
+            if action.kind == "end":
+                asyncio.create_task(_end_after(handle, "integrity"))
+
+    async def _end_after(handle: Any, reason: str) -> None:
+        await handle
+        await agent.finish(reason)
 
     ctx.room.on("data_received", _on_data)
 
@@ -312,6 +358,7 @@ async def entrypoint(ctx: JobContext) -> None:
             final_whiteboard=state.latest_whiteboard,
             hints_used=state.hints_used,
             question_notes=state.notes,
+            last_run=state.last_run,
             end_reason=end_reason,
         )
 
@@ -333,6 +380,27 @@ async def entrypoint(ctx: JobContext) -> None:
 
 async def _cancel(task: asyncio.Task) -> None:
     task.cancel()
+
+
+def _make_stt(ctx_data: dict[str, Any]) -> Any:
+    if VOICE_PROVIDER == "sarvam":
+        # "unknown" auto-detects the language; codemix keeps Hinglish as spoken.
+        return sarvam.STT(model=SARVAM_STT_MODEL, language="unknown", mode="codemix")
+    keyterms = _keyterms(ctx_data)
+    return deepgram.STT(
+        model=DEEPGRAM_STT_MODEL,
+        language="en",
+        smart_format=True,
+        **({"keyterm": keyterms} if keyterms and DEEPGRAM_STT_MODEL.startswith("nova-3") else {}),
+    )
+
+
+def _make_tts(voice: dict[str, str]) -> Any:
+    if VOICE_PROVIDER == "sarvam":
+        return sarvam.TTS(
+            model=SARVAM_TTS_MODEL, speaker=voice["sarvam"], target_language_code="en-IN"
+        )
+    return deepgram.TTS(model=voice["deepgram"])
 
 
 def _keyterms(ctx_data: dict[str, Any]) -> list[str]:

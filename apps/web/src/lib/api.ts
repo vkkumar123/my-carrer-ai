@@ -75,7 +75,8 @@ export const api = {
   deleteLoop: (id: string) => request<void>(`/loops/${id}`, { method: "DELETE" }),
 
   getRound: (id: string) => request<Round>(`/rounds/${id}`),
-  joinRound: (id: string) => request<JoinInfo>(`/rounds/${id}/join`, { method: "POST" }),
+  joinRound: (id: string, voice: "female" | "male") =>
+    request<JoinInfo>(`/rounds/${id}/join`, { method: "POST", body: JSON.stringify({ voice }) }),
   retryEvaluation: (id: string) => request<Round>(`/rounds/${id}/evaluate`, { method: "POST" }),
   sendProctorEvents: (id: string, events: ProctorEvent[]) =>
     request<void>(`/rounds/${id}/proctor-events`, {

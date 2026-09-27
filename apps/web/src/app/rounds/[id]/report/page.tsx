@@ -107,6 +107,25 @@ export default function ReportPage() {
         </Card>
       )}
 
+      {round.end_reason === "integrity" && (
+        <Card className="mt-6 bg-rose-50 ring-rose-200">
+          <p className="font-medium text-rose-900">This interview was ended for integrity reasons</p>
+          <p className="mt-1 text-sm text-rose-800">
+            The interviewer warned you, then gave a final warning, before ending the round. The
+            events are listed below. In a real interview this would usually end the process.
+          </p>
+        </Card>
+      )}
+      {round.end_reason === "candidate_struggling" && (
+        <Card className="mt-6">
+          <p className="font-medium">The interviewer wrapped up early</p>
+          <p className="mt-1 text-sm text-slate-600">
+            Real interviewers often finish early when a candidate can&apos;t make progress. Use the
+            study plan below to prepare the weak areas, then try again.
+          </p>
+        </Card>
+      )}
+
       {ev && (
         <div className="mt-6 space-y-6">
           <Card>

@@ -15,6 +15,21 @@ DISCLAIMER = (
     "company; the real process may differ."
 )
 SENIOR_LEVELS = {"senior", "staff"}
+ROUND_TYPES = {
+    "coding",
+    "system_design",
+    "low_level_design",
+    "tech_deep_dive",
+    "hiring_manager",
+    "topic",
+}
+# Company rounds run at real-interview length.
+MIN_ROUND_MIN, MAX_ROUND_MIN = 45, 60
+MAX_COMPANY_ROUNDS = 5
+
+
+def clamp_duration(minutes: int) -> int:
+    return max(MIN_ROUND_MIN, min(MAX_ROUND_MIN, int(minutes)))
 
 
 @lru_cache
@@ -53,8 +68,28 @@ def rounds_for(blueprint_rounds: list[dict[str, Any]], level: str) -> list[dict[
             continue
         if r.get("junior_only") and senior:
             continue
-        picked.append({k: r[k] for k in ("type", "title", "duration_min")})
+        picked.append(
+            {
+                "type": r["type"],
+                "title": r["title"],
+                "duration_min": clamp_duration(r["duration_min"]),
+            }
+        )
     return picked
+
+
+def rounds_from_research(rounds: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Validated technical rounds from web research; empty when the research is unusable."""
+    picked = [
+        {
+            "type": r["type"],
+            "title": r["title"].strip()[:120],
+            "duration_min": clamp_duration(r["duration_min"]),
+        }
+        for r in rounds
+        if r.get("type") in ROUND_TYPES and r["type"] != "topic" and r.get("title", "").strip()
+    ]
+    return picked[:MAX_COMPANY_ROUNDS] if len(picked) >= 2 else []
 
 
 def company_loop_spec(company: str, level: str) -> dict[str, Any]:

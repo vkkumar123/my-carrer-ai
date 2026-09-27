@@ -50,6 +50,10 @@ class LoopCreate(BaseModel):
         return self
 
 
+class JoinIn(BaseModel):
+    voice: Literal["female", "male"] = "female"
+
+
 class RoundSummary(BaseModel):
     id: str
     index: int
@@ -72,6 +76,7 @@ class LoopOut(BaseModel):
     status: str
     gap_map: dict[str, Any] | None
     disclaimer: str | None = None
+    research_sources: list[dict[str, str]] = []
     created_at: datetime
     rounds: list[RoundSummary]
 
@@ -146,4 +151,5 @@ class RoundCompleteIn(BaseModel):
     final_whiteboard: str | None = Field(default=None, max_length=20_000)
     hints_used: dict[str, int] = Field(default_factory=dict)
     question_notes: dict[str, str] = Field(default_factory=dict)
+    last_run: dict[str, Any] | None = None
     end_reason: str = "completed"

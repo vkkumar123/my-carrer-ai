@@ -80,6 +80,9 @@ class Round(Base):
     # pending -> in_progress -> completed -> evaluated (or failed)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     livekit_room: Mapped[str | None] = mapped_column(String(200))
+    voice: Mapped[str] = mapped_column(
+        String(10), default="female", server_default="female"
+    )  # interviewer voice
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     end_reason: Mapped[str | None] = mapped_column(String(100))
@@ -108,3 +111,17 @@ class ProctorEvent(Base):
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     round: Mapped[Round] = relationship(back_populates="proctor_events")
+
+
+class CompanyResearchCache(Base):
+    """Web research on how a company interviews for a role family, shared across candidates."""
+
+    __tablename__ = "company_research"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    key: Mapped[str] = mapped_column(String(300), unique=True, index=True)
+    company: Mapped[str] = mapped_column(String(200))
+    role_family: Mapped[str] = mapped_column(String(50))
+    data: Mapped[dict[str, Any]] = mapped_column(JSON)
+    sources: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

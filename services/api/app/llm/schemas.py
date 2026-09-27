@@ -81,11 +81,39 @@ class PlannedQuestion(BaseModel):
         description="Editor language for code questions, e.g. 'sql', 'python', 'java'; "
         "empty otherwise"
     )
+    setup_sql: str = Field(
+        description="For SQL questions only: DuckDB SQL that creates the tables from "
+        "screen_text and inserts 5-12 realistic sample rows (including edge cases like NULLs "
+        "or customers without orders), so the candidate can run queries. Empty otherwise."
+    )
     follow_ups: list[str] = Field(description="2-4 probing follow-ups, harder as they go")
     hints: list[str] = Field(
         description="2-3 progressive hints, smallest nudge first. Never the full answer."
     )
     what_good_looks_like: str = Field(description="Key points of a strong answer (never shown)")
+
+
+class ResearchRound(BaseModel):
+    type: Literal["coding", "system_design", "low_level_design", "tech_deep_dive", "hiring_manager"]
+    title: str
+    duration_min: int
+    focus: str
+
+
+class CompanyResearch(BaseModel):
+    rounds: list[ResearchRound] = Field(
+        description="Typical TECHNICAL rounds in order. Exclude HR, recruiter screens, "
+        "online assessments and culture-fit-only rounds."
+    )
+    interviewer_style: str
+    common_topics: list[str]
+    question_patterns: list[str] = Field(
+        description="Paraphrased examples of questions candidates report, not copied text"
+    )
+    difficulty_notes: str
+    confidence: Literal["high", "medium", "low"] = Field(
+        description="How consistent and recent the reports were"
+    )
 
 
 class RubricItem(BaseModel):

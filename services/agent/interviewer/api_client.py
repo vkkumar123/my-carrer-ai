@@ -33,6 +33,7 @@ async def complete_round(
     final_whiteboard: str | None,
     hints_used: dict[str, int],
     question_notes: dict[str, str],
+    last_run: dict[str, Any] | None,
     end_reason: str,
 ) -> None:
     payload = {
@@ -41,6 +42,7 @@ async def complete_round(
         "final_whiteboard": final_whiteboard,
         "hints_used": hints_used,
         "question_notes": question_notes,
+        "last_run": last_run,
         "end_reason": end_reason,
     }
     # Runs during job shutdown, which has a ~10s budget: keep retries short.

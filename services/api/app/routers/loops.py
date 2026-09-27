@@ -23,6 +23,7 @@ def loop_out(loop: InterviewLoop) -> LoopOut:
         status=loop.status,
         gap_map=loop.gap_map,
         disclaimer=loop.spec.get("disclaimer"),
+        research_sources=loop.spec.get("research_sources", []),
         created_at=loop.created_at,
         rounds=[
             RoundSummary(

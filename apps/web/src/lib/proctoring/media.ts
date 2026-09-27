@@ -63,6 +63,8 @@ export function stopStream(stream: MediaStream | null | undefined) {
 /** Calls onLevel with a 0..1 loudness value ~10x a second. Returns a cleanup function. */
 export function watchMicLevel(stream: MediaStream, onLevel: (v: number) => void): () => void {
   const ctx = new AudioContext();
+  // Chrome may create the context suspended (autoplay policy); a suspended meter reads 0.
+  void ctx.resume().catch(() => undefined);
   const source = ctx.createMediaStreamSource(stream);
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 512;

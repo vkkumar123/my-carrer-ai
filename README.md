@@ -51,13 +51,15 @@ Report page               ◀─REST───  scores, evidence, study plan, int
 
 ## Run locally
 
-You need API keys for **Anthropic** (Claude) and **Deepgram** (speech-to-text and text-to-speech).
+You need API keys for **Anthropic** (Claude) and **Sarvam AI** (Indian-accent speech-to-text and
+text-to-speech that understands Hindi, English and Hinglish). Deepgram is an optional
+English-only fallback.
 Google sign-in is optional locally; see [docs/GOOGLE_SIGN_IN.md](docs/GOOGLE_SIGN_IN.md).
 
 ### Option A: Docker Compose
 
 ```bash
-cp .env.example .env            # add ANTHROPIC_API_KEY and DEEPGRAM_API_KEY
+cp .env.example .env            # add ANTHROPIC_API_KEY and SARVAM_API_KEY
 docker compose up --build
 ```
 
@@ -86,7 +88,7 @@ uv run uvicorn app.main:app --reload --port 8000
 
 # 3. Voice agent
 cd services/agent
-cp .env.example .env            # set ANTHROPIC_API_KEY and DEEPGRAM_API_KEY
+cp .env.example .env            # set ANTHROPIC_API_KEY and SARVAM_API_KEY
 uv sync
 uv run python -m interviewer.main download-files
 uv run python -m interviewer.main dev
@@ -111,10 +113,15 @@ cleanly to Postgres (`.github/workflows/ci.yml`).
 
 ## Status
 
-MVP in progress. Built so far: Google sign-in (Supabase), resume + JD analysis, company and
-topic loops, voice interviewer with timekeeping and progressive hints, on-screen problem
-statements, a live code editor and whiteboard the interviewer can read, proctoring lobby and
-live monitoring, and evaluation reports with an integrity score.
+MVP in progress; see the [product brief](docs/PRODUCT_BRIEF.md). Built so far:
 
-Next up: payments (Razorpay), code execution for coding rounds (Judge0), and deployment to
-staging.
+- Google sign-in (Supabase); resume + JD analysis
+- Company loops (45-60 minute rounds) shaped by web research on each company, and topic rounds
+- Voice interviewer with an Indian-accent male or female voice that follows English, Hindi
+  and Hinglish; approach-first coding; progressive hints; may end early like real interviewers
+- On-screen problem statements, a code editor with **Run** (SQL on DuckDB and Python on
+  Pyodide, in the browser) and a whiteboard, all visible to the interviewer
+- Proctoring lobby and live monitoring: warning, final warning, then the interview ends
+- Evaluation reports with an integrity score
+
+Next up: deploy to staging for the friends beta, payments (Razorpay), score trends.

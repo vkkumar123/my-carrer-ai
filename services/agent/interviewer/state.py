@@ -4,10 +4,11 @@ The LLM writes what the interviewer says; this module decides *where* the interv
 which question is active, how much time is left, and when to wrap up or stop.
 """
 
+import re
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 
 class Phase(StrEnum):
@@ -18,6 +19,17 @@ class Phase(StrEnum):
 
 WRAP_UP_MIN = 5
 GRACE_MIN = 2
+EARLY_END_MIN = 25
+
+_DEVANAGARI = re.compile(r"[\u0900-\u097F]")
+
+
+def speaks_hindi(text: str) -> bool:
+    """True when a transcript turn is mostly Hindi (Devanagari script)."""
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return False
+    return sum(1 for c in letters if _DEVANAGARI.match(c)) / len(letters) >= 0.3
 
 
 @dataclass
@@ -32,6 +44,7 @@ class InterviewState:
     latest_code: str | None = None
     code_language: str | None = None
     latest_whiteboard: str | None = None
+    last_run: dict[str, Any] | None = None
     hints_used: dict[str, int] = field(default_factory=dict)
     notes: dict[str, str] = field(default_factory=dict)
 
@@ -105,6 +118,7 @@ class InterviewState:
             "screen_text": q.get("screen_text", ""),
             "workspace": q.get("workspace", "none"),
             "language": q.get("language", ""),
+            "setup_sql": q.get("setup_sql", ""),
         }
 
     def workspace_view(self) -> str:
@@ -116,11 +130,22 @@ class InterviewState:
             )
         else:
             parts.append("EDITOR: empty.")
+        if self.last_run:
+            r = self.last_run
+            status = "failed" if r.get("error") else "succeeded"
+            parts.append(
+                f"LAST RUN ({r.get('language', '?')}, {status}):\n"
+                f"{r.get('error') or r.get('output') or '(no output)'}"
+            )
         if self.latest_whiteboard and self.latest_whiteboard.strip():
             parts.append(f"WHITEBOARD:\n{self.latest_whiteboard}")
         else:
             parts.append("WHITEBOARD: empty.")
         return "\n\n".join(parts)
+
+    def can_end_early(self, now: float | None = None) -> bool:
+        """Real interviewers may wrap up early with a struggling candidate, but not at once."""
+        return self.elapsed_min(now) >= min(EARLY_END_MIN, self.duration_min * 0.5)
 
     def status_line(self) -> str:
         return (
@@ -157,35 +182,72 @@ PAUSE_TEXT = {
 
 
 @dataclass
-class ProctorMonitor:
-    """Decides when the interviewer should say something about a proctoring event.
+class ProctorAction:
+    kind: Literal["say", "pause", "end"]
+    text: str
 
-    Minor events are only logged; repeated ones get a spoken warning (rate limited);
-    critical ones pause the interview until the browser reports the issue resolved.
+
+FINAL_WARNING = " This is your final warning. If it happens again, I'll have to end the interview."
+END_TEXT = (
+    "I'm going to stop the interview here because of repeated integrity issues: {reason}. "
+    "You'll see the details in your report. Thank you for your time."
+)
+
+
+@dataclass
+class ProctorMonitor:
+    """Decides what the interviewer does about proctoring events.
+
+    Minor events are only logged. Repeated ones get a spoken warning (rate limited). Critical
+    ones pause the interview until the browser reports the issue resolved. Each warning or
+    repeated critical issue is a strike: strike 1 warns, strike 2 is a final warning that says
+    the next one ends the interview, strike 3 ends it.
     """
 
     warn_after: int = 2  # occurrences within the window before we speak
     window_s: float = 120.0
     cooldown_s: float = 90.0
+    max_strikes: int = 3
     paused_for: str | None = None
+    strikes: int = 0
+    terminated_for: str | None = None
     _seen: dict[str, list[float]] = field(default_factory=dict)
+    _critical_seen: dict[str, int] = field(default_factory=dict)
     _last_spoken: float = -1e9
 
-    def handle(self, event_type: str, now: float | None = None) -> str | None:
-        """Return a line for the interviewer to say, or None."""
+    def _strike(self, event_type: str, warning: str) -> ProctorAction:
+        self.strikes += 1
+        if self.strikes >= self.max_strikes:
+            self.terminated_for = event_type
+            reason = LABELS.get(event_type, event_type)
+            return ProctorAction("end", END_TEXT.format(reason=reason))
+        if self.strikes == self.max_strikes - 1:
+            warning += FINAL_WARNING
+        return ProctorAction("say", warning)
+
+    def handle(self, event_type: str, now: float | None = None) -> ProctorAction | None:
+        """What the interviewer should do about this event, or None."""
+        if self.terminated_for is not None:
+            return None
         now = time.monotonic() if now is None else now
         if event_type == "resumed":
             if self.paused_for is None:
                 return None
             self.paused_for = None
-            return "Thanks, that's sorted. Let's continue where we left off."
+            return ProctorAction("say", "Thanks, that's sorted. Let's continue where we left off.")
 
         if event_type in CRITICAL_PAUSE:
             if self.paused_for == event_type:
                 return None
             self.paused_for = event_type
             self._last_spoken = now
-            return PAUSE_TEXT[event_type]
+            seen = self._critical_seen.get(event_type, 0) + 1
+            self._critical_seen[event_type] = seen
+            # A second person on camera is never accidental; lost camera/screen once may be.
+            if event_type == "multiple_faces" or seen > 1:
+                action = self._strike(event_type, PAUSE_TEXT[event_type])
+                return action if action.kind == "end" else ProctorAction("pause", action.text)
+            return ProctorAction("pause", PAUSE_TEXT[event_type])
 
         if event_type not in WARNING_TEXT:
             return None
@@ -195,5 +257,19 @@ class ProctorMonitor:
         if len(hits) >= self.warn_after and now - self._last_spoken >= self.cooldown_s:
             self._last_spoken = now
             self._seen[event_type] = []
-            return WARNING_TEXT[event_type]
+            return self._strike(event_type, WARNING_TEXT[event_type])
         return None
+
+
+LABELS = {
+    "tab_hidden": "switching away from the interview window",
+    "window_blur": "leaving the interview window",
+    "fullscreen_exit": "leaving fullscreen",
+    "looking_away": "looking away from the screen",
+    "no_face": "not being visible on camera",
+    "paste_blocked": "trying to paste into the editor",
+    "mic_muted": "muting the microphone",
+    "screen_share_stopped": "stopping the screen share",
+    "camera_off": "turning the camera off",
+    "multiple_faces": "another person being visible on camera",
+}

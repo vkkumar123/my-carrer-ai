@@ -2,7 +2,9 @@
 
 import { FaceDetector, FilesetResolver } from "@mediapipe/tasks-vision";
 
-const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
+import { vendorUrl } from "../vendor";
+
+
 const MODEL_URL = "/models/blaze_face_short_range.tflite";
 
 export interface FaceSample {
@@ -16,7 +18,7 @@ let detectorPromise: Promise<FaceDetector> | null = null;
 export function loadFaceDetector(): Promise<FaceDetector> {
   if (!detectorPromise) {
     detectorPromise = (async () => {
-      const vision = await FilesetResolver.forVisionTasks(WASM_URL);
+      const vision = await FilesetResolver.forVisionTasks(vendorUrl("mediapipe"));
       return FaceDetector.createFromOptions(vision, {
         baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
         runningMode: "VIDEO",

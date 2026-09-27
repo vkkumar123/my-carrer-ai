@@ -53,6 +53,7 @@ def round_context(round_id: str, db: DB) -> dict[str, Any]:
         "topic": loop.topic,
         "level": loop.level,
         "persona": loop.spec["persona"],
+        "voice": rnd.voice,
         "candidate_name": loop.user.name,
         "candidate": candidate,
         "gap_map": loop.gap_map,
@@ -78,7 +79,12 @@ def complete_round(
     rnd.transcript = [t.model_dump() for t in body.transcript]
     rnd.final_code = body.final_code
     rnd.final_whiteboard = body.final_whiteboard
-    rnd.agent_notes = {"hints_used": body.hints_used, "question_notes": body.question_notes}
+    rnd.agent_notes = {
+        "end_reason": body.end_reason,
+        "hints_used": body.hints_used,
+        "question_notes": body.question_notes,
+        "last_code_run": body.last_run,
+    }
     rnd.end_reason = body.end_reason
     rnd.ended_at = datetime.now(UTC)
     rnd.status = "completed"

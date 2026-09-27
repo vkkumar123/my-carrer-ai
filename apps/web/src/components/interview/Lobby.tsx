@@ -15,10 +15,18 @@ import {
 } from "@/lib/proctoring/media";
 import type { Round } from "@/lib/types";
 
+export type Voice = "female" | "male";
+
 export interface LobbyResult {
   camera: MediaStream;
   screen: MediaStream;
+  voice: Voice;
 }
+
+const VOICE_OPTIONS: { value: Voice; label: string }[] = [
+  { value: "female", label: "Priya (female voice)" },
+  { value: "male", label: "Rahul (male voice)" },
+];
 
 type Check = "pending" | "ok" | "fail";
 
@@ -54,6 +62,7 @@ export function Lobby({ round, onReady }: { round: Round; onReady: (r: LobbyResu
   const [screen, setScreen] = useState<MediaStream | null>(null);
   const [extraDisplay, setExtraDisplay] = useState<boolean | undefined>(() => hasExtraDisplay());
   const [consent, setConsent] = useState(false);
+  const [voice, setVoice] = useState<Voice>("female");
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const handedOff = useRef(false);
@@ -140,7 +149,7 @@ export function Lobby({ round, onReady }: { round: Round; onReady: (r: LobbyResu
       await document.documentElement.requestFullscreen().catch(() => undefined);
       stopStream(micStream); // LiveKit opens its own mic track
       handedOff.current = true;
-      await onReady({ camera, screen });
+      await onReady({ camera, screen, voice });
     } catch (e) {
       handedOff.current = false;
       setError(e instanceof Error ? e.message : "Could not start the interview");
@@ -220,6 +229,24 @@ export function Lobby({ round, onReady }: { round: Round; onReady: (r: LobbyResu
             ) : (
               "Your browser can't detect extra monitors. Please use a single display."
             )}
+          </Row>
+
+          <Row status="ok" title="Your interviewer">
+            <div className="flex flex-wrap gap-2">
+              {VOICE_OPTIONS.map((v) => (
+                <button
+                  key={v.value}
+                  type="button"
+                  onClick={() => setVoice(v.value)}
+                  className={`rounded-lg px-3 py-1.5 text-sm ring-1 ${
+                    voice === v.value ? "bg-indigo-50 text-indigo-800 ring-indigo-400" : "ring-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2">Indian English accent. You can answer in English, Hindi or both.</p>
           </Row>
 
           <Row status={consent ? "ok" : "pending"} title="Consent">

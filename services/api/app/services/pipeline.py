@@ -7,10 +7,13 @@ after the response (`--no-cpu-throttling`). Move to Cloud Tasks when volume grow
 import logging
 from typing import Any
 
+from app import blueprints
 from app.db import SessionLocal
 from app.integrity import compute_integrity
-from app.llm import tasks
+from app.llm import research, tasks
 from app.llm.client import LLMError
+from app.llm.schemas import InterviewPlan
+from app.llm.sql_check import setup_sql_error
 from app.models import InterviewLoop, Resume, Round
 
 log = logging.getLogger(__name__)
@@ -29,6 +32,8 @@ def loop_context(loop: InterviewLoop, resume: Resume | None) -> dict[str, Any]:
         if loop.gap_map:
             ctx["gap_map"] = loop.gap_map
     ctx["interviewer_style"] = loop.spec["persona"]["style"]
+    if loop.spec.get("public_reports"):
+        ctx["public_interview_reports"] = loop.spec["public_reports"]
     if resume and resume.parsed:
         ctx["candidate_resume"] = resume.parsed
     return ctx
@@ -41,6 +46,8 @@ def plan_loop(loop_id: str) -> None:
             return
         resume = db.get(Resume, loop.resume_id) if loop.resume_id else None
         try:
+            if loop.mode == "company":
+                _apply_research(db, loop)
             if loop.mode == "company" and loop.jd_text:
                 loop.jd_parsed = tasks.parse_jd(
                     loop.jd_text, loop.company or "", loop.role or ""
@@ -54,6 +61,7 @@ def plan_loop(loop_id: str) -> None:
                 raise LLMError(
                     f"planner returned {len(plan.rounds)} rounds, expected {len(round_specs)}"
                 )
+            _check_sample_tables(plan)
 
             for i, (rs, rp) in enumerate(zip(round_specs, plan.rounds, strict=True)):
                 loop.rounds.append(
@@ -72,6 +80,41 @@ def plan_loop(loop_id: str) -> None:
             loop = db.get(InterviewLoop, loop_id)
             loop.status = "failed"
         db.commit()
+
+
+def _apply_research(db, loop: InterviewLoop) -> None:
+    """Fold public interview reports into the loop; for companies without a curated
+    blueprint, also take the round structure from them."""
+    found = research.get_company_research(db, loop.company or "", loop.role or "")
+    if not found:
+        return
+    spec = dict(loop.spec)
+    spec["public_reports"] = {
+        k: found[k]
+        for k in ("interviewer_style", "common_topics", "question_patterns", "difficulty_notes")
+    }
+    spec["research_sources"] = found.get("sources", [])[:8]
+    if not spec.get("company_known"):
+        rounds = blueprints.rounds_from_research(found.get("rounds", []))
+        if rounds:
+            spec["rounds"] = rounds
+            spec["persona"] = {"style": found["interviewer_style"], "pace": "moderate"}
+    loop.spec = spec  # reassign so the JSON column is saved
+
+
+def _check_sample_tables(plan: InterviewPlan) -> None:
+    """Every SQL question's sample tables must load, or the Run button would just error."""
+    for rnd in plan.rounds:
+        for q in rnd.questions:
+            error = setup_sql_error(q.setup_sql)
+            if error is None:
+                continue
+            log.warning("setup_sql for %s failed (%s); asking for a fix", q.id, error)
+            try:
+                fixed = tasks.fix_setup_sql(q.screen_text, q.setup_sql, error)
+            except LLMError:
+                fixed = ""
+            q.setup_sql = fixed if fixed and setup_sql_error(fixed) is None else ""
 
 
 def evaluate_round(round_id: str) -> None:

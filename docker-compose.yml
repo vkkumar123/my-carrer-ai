@@ -1,5 +1,5 @@
 # Local development stack: docker compose up --build
-# Needs ANTHROPIC_API_KEY and DEEPGRAM_API_KEY in a root .env file (see .env.example).
+# Needs ANTHROPIC_API_KEY and SARVAM_API_KEY in a root .env file (see .env.example).
 # Host ports can be changed in .env (WEB_HOST_PORT, API_HOST_PORT, POSTGRES_HOST_PORT) if
 # something else on your machine already uses them.
 services:
@@ -45,7 +45,9 @@ services:
       LIVEKIT_URL: ws://livekit:7880
       API_BASE_URL: http://api:8000
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SARVAM_API_KEY: ${SARVAM_API_KEY:-}
       DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
+      VOICE_PROVIDER: ${VOICE_PROVIDER:-sarvam}
     command: python -m interviewer.main dev
     depends_on: [livekit, api]
 

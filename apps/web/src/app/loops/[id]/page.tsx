@@ -47,6 +47,22 @@ export default function LoopPage() {
         {loop.mode === "company" ? "Company loop" : "Topic practice"} · {loop.level} level
       </p>
       {loop.disclaimer && <p className="mt-2 text-xs text-slate-500">{loop.disclaimer}</p>}
+      {loop.research_sources.length > 0 && (
+        <details className="mt-2 text-xs text-slate-500">
+          <summary className="cursor-pointer">
+            Interview style researched from {loop.research_sources.length} public candidate reports
+          </summary>
+          <ul className="mt-1 list-inside list-disc">
+            {loop.research_sources.map((s) => (
+              <li key={s.url}>
+                <a href={s.url} target="_blank" rel="noopener noreferrer" className="underline">
+                  {s.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       {loop.status === "planning" && (
         <Card className="mt-6 flex items-center gap-3">

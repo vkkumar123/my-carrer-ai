@@ -128,15 +128,83 @@ def test_topic_loop_and_short_round(client, auth, fake_llm):
     assert rnd["status"] == "insufficient" and rnd["evaluation"] is None
 
 
-def test_unknown_company_uses_generic_template(client, auth, fake_llm):
+def test_unknown_company_uses_researched_rounds_and_caches(client, auth, fake_llm):
     r = client.post(
         "/loops",
         headers=auth,
-        json={"mode": "company", "company": "Zoho", "role": "SDE", "level": "junior"},
+        json={"mode": "company", "company": "Zoho", "role": "Software Engineer", "level": "junior"},
     )
     loop = client.get(f"/loops/{r.json()['id']}", headers=auth).json()
-    assert loop["company"] == "Zoho"
+    assert loop["company"] == "Zoho" and loop["status"] == "ready"
+    # researched rounds, clamped to 45-60 minutes
+    assert [(x["type"], x["duration_min"]) for x in loop["rounds"]] == [
+        ("coding", 45),
+        ("system_design", 60),
+        ("hiring_manager", 45),
+    ]
+    assert loop["research_sources"][0]["url"] == "https://example.com/zoho"
+
+    # a second candidate for the same company and role family reuses the research
+    client.post(
+        "/loops",
+        headers=auth,
+        json={"mode": "company", "company": "zoho", "role": "SDE 2", "level": "mid"},
+    )
+    assert fake_llm["research"] == 1
+
+
+def test_research_failure_falls_back_to_generic_template(client, auth, fake_llm, monkeypatch):
+    from app.llm import research
+
+    def boom(company, role):
+        raise TypeError("no credentials")
+
+    monkeypatch.setattr(research, "_research", boom)
+    r = client.post(
+        "/loops",
+        headers=auth,
+        json={"mode": "company", "company": "Freshworks", "role": "SDE", "level": "junior"},
+    )
+    loop = client.get(f"/loops/{r.json()['id']}", headers=auth).json()
+    assert loop["status"] == "ready" and loop["research_sources"] == []
     assert "low_level_design" in [x["type"] for x in loop["rounds"]]
+
+
+def test_broken_sample_tables_are_repaired_or_dropped(client, auth, fake_llm, monkeypatch):
+    from app.llm import tasks
+    from app.llm.schemas import InterviewPlan
+
+    def plan_with_bad_sql(ctx, specs):
+        rp = fake_round(specs[0]["type"], specs[0]["title"], specs[0]["duration_min"])
+        rp.questions[0].setup_sql = "CREATE TABLE t(a INTEGER); INSERT INTO t VALUES ('x');"
+        return InterviewPlan(rounds=[rp])
+
+    monkeypatch.setattr(tasks, "plan_loop", plan_with_bad_sql)
+    good = "CREATE TABLE t(a INTEGER); INSERT INTO t VALUES (1);"
+    monkeypatch.setattr(tasks, "fix_setup_sql", lambda text, sql, err: good)
+    r = client.post("/loops", headers=auth, json={"mode": "topic", "topic": "SQL"})
+    round_id = client.get(f"/loops/{r.json()['id']}", headers=auth).json()["rounds"][0]["id"]
+    ctx = client.get(f"/internal/rounds/{round_id}/context", headers=INTERNAL).json()
+    assert ctx["plan"]["questions"][0]["setup_sql"] == good
+
+    monkeypatch.setattr(tasks, "fix_setup_sql", lambda text, sql, err: "still broken(")
+    r = client.post("/loops", headers=auth, json={"mode": "topic", "topic": "SQL"})
+    round_id = client.get(f"/loops/{r.json()['id']}", headers=auth).json()["rounds"][0]["id"]
+    ctx = client.get(f"/internal/rounds/{round_id}/context", headers=INTERNAL).json()
+    assert ctx["plan"]["questions"][0]["setup_sql"] == ""
+
+
+def test_voice_choice_reaches_the_interviewer(client, auth, fake_llm):
+    r = client.post("/loops", headers=auth, json={"mode": "topic", "topic": "Python"})
+    round_id = client.get(f"/loops/{r.json()['id']}", headers=auth).json()["rounds"][0]["id"]
+    assert (
+        client.post(f"/rounds/{round_id}/join", headers=auth, json={"voice": "male"}).status_code
+        == 200
+    )
+    ctx = client.get(f"/internal/rounds/{round_id}/context", headers=INTERNAL).json()
+    assert ctx["voice"] == "male"
+    bad = client.post(f"/rounds/{round_id}/join", headers=auth, json={"voice": "robot"})
+    assert bad.status_code == 422
 
 
 def test_validation_and_isolation(client, auth, fake_llm):

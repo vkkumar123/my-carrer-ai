@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 
-from app.api_schemas import JoinOut, ProctorBatchIn, RoundOut
+from app.api_schemas import JoinIn, JoinOut, ProctorBatchIn, RoundOut
 from app.auth import DB, CurrentUser
 from app.config import get_settings
 from app.livekit_service import participant_token
@@ -51,12 +51,13 @@ def get_round(round_id: str, user: CurrentUser, db: DB) -> RoundOut:
 
 
 @router.post("/{round_id}/join", response_model=JoinOut)
-def join_round(round_id: str, user: CurrentUser, db: DB) -> JoinOut:
+def join_round(round_id: str, user: CurrentUser, db: DB, body: JoinIn | None = None) -> JoinOut:
     """Start (or rejoin) a round: returns a LiveKit token that also summons the AI interviewer."""
     rnd = _get_owned_round(db, round_id, user.id)
     if rnd.status not in {"pending", "in_progress"}:
         raise HTTPException(status.HTTP_409_CONFLICT, "This round has already finished")
     if rnd.status == "pending":
+        rnd.voice = (body or JoinIn()).voice
         rnd.status = "in_progress"
         rnd.started_at = datetime.now(UTC)
         rnd.livekit_room = f"round-{rnd.id}-{uuid.uuid4().hex[:6]}"

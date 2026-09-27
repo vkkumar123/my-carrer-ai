@@ -16,6 +16,7 @@ import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import { requestEntireScreen, stopStream } from "@/lib/proctoring/media";
 import { Proctor, type ProctorState } from "@/lib/proctoring/proctor";
+import type { RunResult } from "@/lib/runners/types";
 import type { JoinInfo, ProctorEvent, Round } from "@/lib/types";
 
 import { CodeEditor, LANGUAGES } from "./CodeEditor";
@@ -30,6 +31,7 @@ interface ScreenQuestion {
   screen_text: string;
   workspace: "code" | "whiteboard" | "none";
   language: string;
+  setup_sql?: string;
 }
 
 type Tab = "code" | "whiteboard";
@@ -157,6 +159,17 @@ function Session({ join, camera, screen, onFinished }: Props) {
     } else if (agentSeen.current) finish();
   }, [agent, finish, send]);
 
+  // Ask for the active question as soon as we're connected too (e.g. after a page reload,
+  // when the interviewer is already in the room).
+  useEffect(() => {
+    const onConnected = () => send("sync", {});
+    if (room.state === "connected") onConnected();
+    room.on(RoomEvent.Connected, onConnected);
+    return () => {
+      room.off(RoomEvent.Connected, onConnected);
+    };
+  }, [room, send]);
+
   // The interviewer pushes the active question to the problem panel.
   useEffect(() => {
     const onData = (payload: Uint8Array, _p: unknown, _k: unknown, topic?: string) => {
@@ -189,6 +202,11 @@ function Session({ join, camera, screen, onFinished }: Props) {
 
   const onCode = useCallback((code: string, lang: string) => send("code", { code, language: lang }), [send]);
   const onBoard = useCallback((summary: string) => send("whiteboard", { summary }), [send]);
+  const onRun = useCallback(
+    (r: RunResult, lang: string) =>
+      send("run", { language: lang, output: r.text.slice(0, 4000), error: r.error ?? null }),
+    [send],
+  );
   const onPaste = useCallback(() => proctorRef.current?.reportPaste(), []);
 
   async function reshare() {
@@ -322,7 +340,14 @@ function Session({ join, camera, screen, onFinished }: Props) {
             {/* Both stay mounted so switching tabs never loses work. */}
             <div className="relative min-h-0 flex-1">
               <div className={`absolute inset-0 ${tab === "code" ? "" : "invisible"}`}>
-                <CodeEditor language={language} onLanguageChange={setLanguage} onChange={onCode} onPasteBlocked={onPaste} />
+                <CodeEditor
+                  language={language}
+                  onLanguageChange={setLanguage}
+                  setupSql={question?.setup_sql ?? ""}
+                  onChange={onCode}
+                  onRun={onRun}
+                  onPasteBlocked={onPaste}
+                />
               </div>
               {boardOpened && (
                 <div className={`absolute inset-0 ${tab === "whiteboard" ? "" : "invisible"}`}>

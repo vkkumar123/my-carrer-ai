@@ -54,6 +54,8 @@ def fake_round(rtype: str, title: str, minutes: int) -> s.RoundPlan:
                 screen_text="orders(order_id INT, customer_id INT, amount DECIMAL)",
                 workspace="code",
                 language="sql",
+                setup_sql="CREATE TABLE orders(order_id INTEGER, customer_id INTEGER, "
+                "amount DECIMAL(10,2)); INSERT INTO orders VALUES (1, 1, 10.5);",
                 follow_ups=["What changes with a LEFT JOIN?"],
                 hints=["Which join keeps customers without orders?"],
                 what_good_looks_like="LEFT JOIN + COALESCE(SUM(amount), 0)",
@@ -63,9 +65,31 @@ def fake_round(rtype: str, title: str, minutes: int) -> s.RoundPlan:
     )
 
 
+RESEARCH = {
+    "rounds": [
+        {"type": "coding", "title": "DSA", "duration_min": 30, "focus": "arrays"},
+        {"type": "system_design", "title": "HLD", "duration_min": 75, "focus": "scale"},
+        {"type": "hiring_manager", "title": "HM", "duration_min": 45, "focus": "projects"},
+    ],
+    "interviewer_style": "Friendly but fast",
+    "common_topics": ["DP", "graphs"],
+    "question_patterns": ["Design a URL shortener"],
+    "difficulty_notes": "Medium",
+    "confidence": "medium",
+}
+
+
 @pytest.fixture
 def fake_llm(monkeypatch):
-    from app.llm import tasks
+    from app.llm import research, tasks
+
+    calls = {"research": 0}
+
+    def fake_research(company, role):
+        calls["research"] += 1
+        return RESEARCH, [{"url": "https://example.com/zoho", "title": "Zoho experience"}]
+
+    monkeypatch.setattr(research, "_research", fake_research)
 
     def plan_loop(context, round_specs):
         return s.InterviewPlan(
@@ -118,3 +142,4 @@ def fake_llm(monkeypatch):
             communication_notes="Good pace",
         ),
     )
+    return calls

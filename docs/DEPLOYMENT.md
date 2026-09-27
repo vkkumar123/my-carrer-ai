@@ -74,7 +74,7 @@ gcloud run jobs execute mycareer-migrate --region asia-south1 --wait
 2. Deploy `services/agent` with LiveKit Cloud agent hosting (see the LiveKit docs on
    deploying agents; the `Dockerfile` in `services/agent` is ready for it). Set:
    `LIVEKIT_AGENT_NAME=mycareer-interviewer`, `API_BASE_URL=https://<cloud-run-url>`,
-   `INTERNAL_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPGRAM_API_KEY`.
+   `INTERNAL_API_KEY`, `ANTHROPIC_API_KEY`, `SARVAM_API_KEY`.
 3. Fallback if hosting there doesn't fit: run the same image on a small GCE managed instance
    group in `asia-south1` with `python -m interviewer.main start`. Each worker handles several
    concurrent interviews; scale on CPU.
@@ -86,6 +86,10 @@ gcloud run jobs execute mycareer-migrate --region asia-south1 --wait
    `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
    `NEXT_PUBLIC_DEV_LOGIN=false`.
 3. Add the domain in Vercel and point DNS at it from Cloudflare.
+4. The build copies about 75 MB of browser runtimes (editor, DuckDB, Pyodide, face
+   detection) into `public/vendor`. If that is too large for the hosting plan, upload
+   `public/vendor` to Cloudflare R2 behind a custom domain and set
+   `NEXT_PUBLIC_VENDOR_BASE_URL` to it (allow CORS from the app's domain).
 
 ## Cost model
 

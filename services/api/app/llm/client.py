@@ -78,3 +78,56 @@ def structured(
         response.usage.cache_read_input_tokens,
     )
     return response.parsed_output
+
+
+def web_research(
+    *, system: str, user: str, max_searches: int = 8
+) -> tuple[str, list[dict[str, str]]]:
+    """Let the model search the web; returns its written findings and the pages it saw."""
+    settings = get_settings()
+    tools = [
+        {
+            "type": "web_search_20260209",
+            "name": "web_search",
+            "max_uses": max_searches,
+            "user_location": {"type": "approximate", "country": "IN"},
+        }
+    ]
+    first_turn = {"role": "user", "content": user}
+    assistant_blocks: list = []
+    try:
+        for _ in range(4):  # resume server-side tool loops that pause
+            messages = [first_turn]
+            if assistant_blocks:
+                messages.append({"role": "assistant", "content": assistant_blocks})
+            response = _get_client().messages.create(
+                model=settings.llm_model_smart,
+                max_tokens=16000,
+                system=system,
+                messages=messages,
+                tools=tools,
+                thinking={"type": "adaptive"},
+                output_config={"effort": "medium"},
+            )
+            assistant_blocks = assistant_blocks + list(response.content)
+            if response.stop_reason != "pause_turn":
+                break
+    except anthropic.APIStatusError as e:
+        log.exception("web research failed (status=%s)", e.status_code)
+        raise LLMError(f"Web research failed with status {e.status_code}") from e
+    except anthropic.APIConnectionError as e:
+        raise LLMError("Could not reach the LLM provider") from e
+
+    if response.stop_reason == "refusal":
+        raise LLMError("The model declined the research request")
+
+    text = "\n".join(b.text for b in assistant_blocks if b.type == "text").strip()
+    sources: dict[str, str] = {}
+    for b in assistant_blocks:
+        if b.type == "web_search_tool_result" and isinstance(b.content, list):
+            for r in b.content:
+                if getattr(r, "type", "") == "web_search_result":
+                    sources.setdefault(r.url, r.title or r.url)
+    if not text:
+        raise LLMError("Web research returned no findings")
+    return text, [{"url": u, "title": t} for u, t in list(sources.items())[:20]]

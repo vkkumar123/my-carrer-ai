@@ -76,7 +76,17 @@ Per-round debrief (built), plus:
 Coaching/practice mode, HR rounds, video avatar interviewer, recording playback,
 B2B/college dashboards.
 
-## Open decision: unit economics
+## Decisions (2026-09-27)
+
+- **Pricing:** keep Rs 99 / Rs 499 for now and accept running at a loss during the beta;
+  revisit with measured cost per interview-minute.
+- **Voice:** Sarvam AI (Indian-accent male/female voices; Hindi, English, Hinglish).
+- **Beta:** free for the founder's friends on staging; Razorpay payments next, before public
+  launch.
+- **Build order:** beta-ready bundle (voice, run code, approach-first, early end, integrity
+  escalation, company web research), then deploy to staging.
+
+## Unit economics (to measure)
 
 Voice interviews cost money per minute (speech-to-text, text-to-speech, the LLM for each
 turn, realtime media). Estimates must be measured on staging in the first week; at an assumed

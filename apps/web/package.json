@@ -3,19 +3,24 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copy-vendor.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-vendor.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@duckdb/duckdb-wasm": "1.32.0",
     "@excalidraw/excalidraw": "^0.18.1",
     "@livekit/components-react": "^2.9.24",
     "@mediapipe/tasks-vision": "^1.0.1",
     "@monaco-editor/react": "^4.7.0",
     "@supabase/supabase-js": "^2.117.2",
     "livekit-client": "^2.22.3",
+    "monaco-editor": "0.55.1",
     "next": "16.3.6",
+    "pyodide": "314.0.7",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
