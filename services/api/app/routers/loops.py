@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -90,10 +92,25 @@ def create_loop(
     return loop_out(loop)
 
 
+PLANNING_TIMEOUT = timedelta(minutes=10)
+
+
+def _expire_stale_planning(db: DB, loop: InterviewLoop) -> None:
+    """Planning runs in the background; if the API restarted mid-way it never finishes.
+    Mark it failed so the candidate gets a Try again button instead of waiting forever."""
+    if loop.status != "planning":
+        return
+    created = loop.created_at if loop.created_at.tzinfo else loop.created_at.replace(tzinfo=UTC)
+    if datetime.now(UTC) - created > PLANNING_TIMEOUT:
+        loop.status = "failed"
+        db.commit()
+
+
 def _get_owned_loop(db: DB, loop_id: str, user_id: str) -> InterviewLoop:
     loop = db.get(InterviewLoop, loop_id, options=[selectinload(InterviewLoop.rounds)])
     if loop is None or loop.user_id != user_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Interview not found")
+    _expire_stale_planning(db, loop)
     return loop
 
 
@@ -105,7 +122,10 @@ def list_loops(user: CurrentUser, db: DB) -> list[LoopOut]:
         .options(selectinload(InterviewLoop.rounds))
         .order_by(InterviewLoop.created_at.desc())
     )
-    return [loop_out(loop) for loop in rows]
+    loops = list(rows)
+    for loop in loops:
+        _expire_stale_planning(db, loop)
+    return [loop_out(loop) for loop in loops]
 
 
 @router.get("/{loop_id}", response_model=LoopOut)

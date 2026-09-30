@@ -57,7 +57,7 @@ export function LiveRoom(props: Props) {
       serverUrl={props.join.livekit_url}
       token={props.join.token}
       connect
-      audio
+      audio={{ echoCancellation: true, noiseSuppression: true, autoGainControl: true }}
       video={false}
       className="flex h-screen flex-col bg-slate-950 text-slate-100"
     >
@@ -67,13 +67,14 @@ export function LiveRoom(props: Props) {
   );
 }
 
-function useCountdown(round: Round) {
+/** Counts down from when the interviewer arrived (null = not yet), like the agent's own clock. */
+function useCountdown(round: Round, startedAt: number | null) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  const start = round.started_at ? new Date(round.started_at).getTime() : now;
+  const start = startedAt ?? now;
   const left = Math.round((start + round.duration_min * 60_000 - now) / 1000);
   const abs = Math.abs(left);
   return { text: `${left < 0 ? "-" : ""}${Math.floor(abs / 60)}:${String(abs % 60).padStart(2, "0")}`, over: left < 0 };
@@ -84,7 +85,9 @@ function Session({ join, camera, screen, onFinished }: Props) {
   const round = join.round;
   const { state: agentState, audioTrack, agent } = useVoiceAssistant();
   const transcriptions = useTranscriptions();
-  const clock = useCountdown(round);
+  const [agentArrivedAt, setAgentArrivedAt] = useState<number | null>(null);
+  const [joinTimedOut, setJoinTimedOut] = useState(false);
+  const clock = useCountdown(round, agentArrivedAt);
   const videoRef = useRef<HTMLVideoElement>(null);
   const proctorRef = useRef<Proctor | null>(null);
   const queue = useRef<ProctorEvent[]>([]);
@@ -154,10 +157,21 @@ function Session({ join, camera, screen, onFinished }: Props) {
   // resend the active question in case we missed it.
   useEffect(() => {
     if (agent) {
+      if (!agentSeen.current) setAgentArrivedAt(Date.now());
       agentSeen.current = true;
       send("sync", {});
     } else if (agentSeen.current) finish();
   }, [agent, finish, send]);
+
+  // If the interviewer hasn't arrived after 25s, say so instead of leaving the candidate
+  // waiting with a running clock.
+  useEffect(() => {
+    if (agent) return;
+    const t = setTimeout(() => {
+      if (!agentSeen.current) setJoinTimedOut(true);
+    }, 25_000);
+    return () => clearTimeout(t);
+  }, [agent]);
 
   // Ask for the active question as soon as we're connected too (e.g. after a page reload,
   // when the interviewer is already in the room).
@@ -374,6 +388,28 @@ function Session({ join, camera, screen, onFinished }: Props) {
               </Button>
             )}
             {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
+          </div>
+        </div>
+      )}
+
+      {joinTimedOut && !agent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4">
+          <div className="max-w-md rounded-2xl bg-slate-900 p-6 text-center ring-1 ring-slate-700">
+            <p className="text-lg font-semibold">Your interviewer couldn&apos;t join</p>
+            <p className="mt-2 text-sm text-slate-300">
+              This is a problem on our side, not yours, and the round hasn&apos;t started. Try
+              again; if it keeps happening, check the interviewer service logs.
+            </p>
+            <div className="mt-4 flex justify-center gap-2">
+              <Button
+                onClick={() => {
+                  room.disconnect();
+                  window.location.reload();
+                }}
+              >
+                Try again
+              </Button>
+            </div>
           </div>
         </div>
       )}

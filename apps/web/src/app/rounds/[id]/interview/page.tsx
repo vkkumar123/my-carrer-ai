@@ -48,7 +48,7 @@ export default function InterviewPage() {
       <Lobby
         round={round}
         onReady={async (devices) => {
-          const join = await api.joinRound(round.id, devices.voice);
+          const join = await api.joinRound(round.id, devices.voice, devices.language);
           setSession({ ...devices, join });
         }}
       />

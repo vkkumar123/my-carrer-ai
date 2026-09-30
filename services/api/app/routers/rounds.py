@@ -56,12 +56,15 @@ def join_round(round_id: str, user: CurrentUser, db: DB, body: JoinIn | None = N
     rnd = _get_owned_round(db, round_id, user.id)
     if rnd.status not in {"pending", "in_progress"}:
         raise HTTPException(status.HTTP_409_CONFLICT, "This round has already finished")
+    choice = body or JoinIn()
     if rnd.status == "pending":
-        rnd.voice = (body or JoinIn()).voice
+        rnd.voice, rnd.language = choice.voice, choice.language
         rnd.status = "in_progress"
         rnd.started_at = datetime.now(UTC)
-        rnd.livekit_room = f"round-{rnd.id}-{uuid.uuid4().hex[:6]}"
-        db.commit()
+    # A fresh room on every join: LiveKit sends the interviewer when a room is created, so a
+    # retry after the interviewer failed to join always gets a new one.
+    rnd.livekit_room = f"round-{rnd.id}-{uuid.uuid4().hex[:6]}"
+    db.commit()
 
     token = participant_token(
         room=rnd.livekit_room,

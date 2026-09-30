@@ -59,6 +59,24 @@ Data messages:
 | `proctor` | browser -> agent | integrity event |
 | `sync` | browser -> agent | ask the agent to resend the active question |
 
+## Turn-taking: when the interviewer speaks (agent)
+
+Real interviewers mostly stay quiet while the candidate thinks and works. Before any reply,
+`services/agent/interviewer/turns.py` decides whether the interviewer should speak:
+
+- **Addressed** (a question, "done", "can you check", "hint?", Hindi equivalents): reply.
+- **Working** ("let me write it", "ek minute", or typing/drawing in the last 25s): stay silent.
+- **Fillers** ("hmm", "okay", "haan"): silent, unless answering a question just asked.
+- **Explanations** while not coding: reply (probe the approach).
+- **Check-ins** after silence: at most one per 45s (150s during hands-on work), and none after
+  two unanswered check-ins.
+
+Silent turns are still added to the conversation history and the transcript. The model can
+also choose silence by replying `<wait>`, which is filtered out of the audio stream
+(`silence.py`). The prompt forbids giving fixes or answers unprompted, confirming correctness,
+praise, and verbal feedback. The workspace view numbers each run and flags when the code
+changed since the last run, so the interviewer never judges stale output.
+
 ## Interview state machine (agent)
 
 `services/agent/interviewer/state.py` holds the logic, with no LiveKit dependency:
@@ -82,10 +100,11 @@ Data messages:
   ends the interview, strike 3 ends it with the reason stated (`end_reason = integrity`).
   A second person on camera is a strike immediately; a lost screen share or camera counts
   from the second time.
-- **Language and voice:** Sarvam speech-to-text auto-detects the language (code-mixed
-  Hinglish mode). When the candidate speaks Hindi, the interviewer replies in Hindi and the
-  voice switches to Hindi; otherwise English (Indian accent). Female voice "Priya" or male
-  "Rahul", chosen in the lobby.
+- **Language and voice:** the candidate chooses English or Hindi + English in the lobby.
+  English uses Sarvam speech-to-text in `en-IN`; Hindi + English uses `hi-IN` code-mixed
+  mode (no per-sentence auto-detection, which mis-picked other Indian languages). In Hindi +
+  English interviews the voice switches to Hindi when the candidate speaks Hindi. Female voice
+  "Priya" or male "Rahul", chosen in the lobby.
 - **Latency:** one worker process stays warm (VAD loaded). Against a self-hosted LiveKit
   server the agent uses the local turn detector and VAD-based interruptions; LiveKit Cloud's
   hosted versions are used only when running on LiveKit Cloud.

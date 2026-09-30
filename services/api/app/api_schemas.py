@@ -34,7 +34,8 @@ class LoopCreate(BaseModel):
     level: Level = "mid"
     # topic mode
     topic: str | None = Field(default=None, max_length=200)
-    duration_min: int = Field(default=30, ge=15, le=60)
+    # 5 minutes is a quick test round
+    duration_min: int = Field(default=30, ge=5, le=60)
     # company mode
     company: str | None = Field(default=None, max_length=200)
     role: str | None = Field(default=None, max_length=200)
@@ -52,6 +53,7 @@ class LoopCreate(BaseModel):
 
 class JoinIn(BaseModel):
     voice: Literal["female", "male"] = "female"
+    language: Literal["english", "hinglish"] = "english"
 
 
 class RoundSummary(BaseModel):

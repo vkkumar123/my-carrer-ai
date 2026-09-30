@@ -54,6 +54,7 @@ def round_context(round_id: str, db: DB) -> dict[str, Any]:
         "level": loop.level,
         "persona": loop.spec["persona"],
         "voice": rnd.voice,
+        "language": rnd.language,
         "candidate_name": loop.user.name,
         "candidate": candidate,
         "gap_map": loop.gap_map,

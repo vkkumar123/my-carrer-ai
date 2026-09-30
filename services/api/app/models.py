@@ -80,6 +80,8 @@ class Round(Base):
     # pending -> in_progress -> completed -> evaluated (or failed)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     livekit_room: Mapped[str | None] = mapped_column(String(200))
+    # Interview language chosen in the lobby: english | hinglish
+    language: Mapped[str] = mapped_column(String(10), default="english", server_default="english")
     voice: Mapped[str] = mapped_column(
         String(10), default="female", server_default="female"
     )  # interviewer voice

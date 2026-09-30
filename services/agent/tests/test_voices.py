@@ -16,8 +16,8 @@ def test_sarvam_voices_are_valid(gender, monkeypatch):
     monkeypatch.setattr(main, "VOICE_PROVIDER", "sarvam")
     tts = main._make_tts(main.VOICES[gender])
     tts.update_options(target_language_code="hi-IN")  # switching to Hindi must be allowed
-    stt = main._make_stt({"plan": {"questions": []}})
-    assert stt is not None
+    for language in ("english", "hinglish"):
+        assert main._make_stt({"plan": {"questions": []}}, language) is not None
 
 
 @pytest.mark.parametrize("gender", ["female", "male"])

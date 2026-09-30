@@ -51,10 +51,9 @@ def test_company_loop_end_to_end(client, auth, fake_llm):
     assert join.status_code == 200, join.text
     assert join.json()["token"] and join.json()["room"].startswith(f"round-{round_id}")
 
-    # rejoin keeps the same room
-    assert (
-        client.post(f"/rounds/{round_id}/join", headers=auth).json()["room"] == join.json()["room"]
-    )
+    # rejoining (e.g. after the interviewer failed to join) gets a fresh room
+    rejoin = client.post(f"/rounds/{round_id}/join", headers=auth).json()["room"]
+    assert rejoin != join.json()["room"] and rejoin.startswith(f"round-{round_id}")
 
     ev = client.post(
         f"/rounds/{round_id}/proctor-events",
@@ -279,3 +278,42 @@ def test_agent_error_before_answers_gives_round_back(client, auth, fake_llm):
     assert res.json()["status"] == "pending"
     rejoin = client.post(f"/rounds/{round_id}/join", headers=auth)
     assert rejoin.status_code == 200 and rejoin.json()["room"] != first_room
+
+
+def test_five_minute_round_and_language_choice(client, auth, fake_llm):
+    r = client.post(
+        "/loops", headers=auth, json={"mode": "topic", "topic": "SQL", "duration_min": 5}
+    )
+    assert r.status_code == 202, r.text
+    round_id = client.get(f"/loops/{r.json()['id']}", headers=auth).json()["rounds"][0]["id"]
+    first = client.post(
+        f"/rounds/{round_id}/join", headers=auth, json={"voice": "male", "language": "hinglish"}
+    ).json()
+    ctx = client.get(f"/internal/rounds/{round_id}/context", headers=INTERNAL).json()
+    assert ctx["duration_min"] == 5 and ctx["language"] == "hinglish" and ctx["voice"] == "male"
+    # a retry (e.g. the interviewer failed to join) gets a fresh room, keeping the choices
+    again = client.post(f"/rounds/{round_id}/join", headers=auth, json={"voice": "female"}).json()
+    assert again["room"] != first["room"]
+    assert (
+        client.get(f"/internal/rounds/{round_id}/context", headers=INTERNAL).json()["voice"]
+        == "male"
+    )
+    too_short = client.post(
+        "/loops", headers=auth, json={"mode": "topic", "topic": "SQL", "duration_min": 3}
+    )
+    assert too_short.status_code == 422
+
+
+def test_planning_stuck_after_restart_is_marked_failed(client, auth, fake_llm):
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import InterviewLoop
+
+    r = client.post("/loops", headers=auth, json={"mode": "topic", "topic": "Go"})
+    with SessionLocal() as db:
+        loop = db.get(InterviewLoop, r.json()["id"])
+        loop.status = "planning"  # as if the API died mid-planning
+        loop.created_at = datetime.now(UTC) - timedelta(minutes=30)
+        db.commit()
+    assert client.get(f"/loops/{r.json()['id']}", headers=auth).json()["status"] == "failed"

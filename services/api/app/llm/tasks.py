@@ -80,7 +80,9 @@ their approach before writing code; the first follow-up asks them to implement i
 difficulty for this company, without copying reported questions verbatim.
 - Calibrate difficulty to the seniority level. Start with a warm-up, then ramp up.
 - Plan roughly one main question per 10-15 minutes of a round (system design: one problem \
-explored in depth). Rounds last 45-60 minutes, like real interviews.
+explored in depth). Company rounds last 45-60 minutes, like real interviews. A round of 10 \
+minutes or less is a quick test: exactly one short, easy-to-medium question with 1-2 \
+follow-ups.
 - When a resume is provided, include at least one question per round grounded in the \
 candidate's own projects or claims, and target the probe areas from the gap map.
 - Adapt round content to the role: e.g. a data engineer's coding round can include SQL or \

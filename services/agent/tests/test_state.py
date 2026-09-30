@@ -116,12 +116,26 @@ def test_detects_hindi_turns():
     assert not speaks_hindi("")
 
 
-def test_workspace_view_includes_last_run():
+def test_workspace_view_reports_latest_run_and_staleness():
     s = make_state()
-    s.last_run = {"language": "sql", "output": "", "error": "Binder Error: column x"}
-    assert "LAST RUN (sql, failed):\nBinder Error" in s.workspace_view()
-    s.last_run = {"language": "sql", "output": "id | total\n1 | 10", "error": None}
-    assert "succeeded" in s.workspace_view() and "1 | 10" in s.workspace_view()
+    assert "has not run anything yet" in s.workspace_view(now=0)
+    s.latest_code, s.code_language = "SELECT missing FROM orders", "sql"
+    s.record_run(
+        {"language": "sql", "code": "SELECT missing FROM orders", "error": "Binder Error: x"},
+        now=10,
+    )
+    view = s.workspace_view(now=15)
+    assert "LATEST RUN: run #1, 5s ago, FAILED." in view and "Binder Error" in view
+    assert "CHANGED" not in view
+    # candidate edits the query after running: the old output must not be trusted
+    s.latest_code = "SELECT customer_id FROM orders"
+    assert "CHANGED since this run" in s.workspace_view(now=20)
+    s.record_run(
+        {"language": "sql", "code": "SELECT customer_id FROM orders", "output": "customer_id\n1"},
+        now=25,
+    )
+    view = s.workspace_view(now=26)
+    assert "run #2" in view and "succeeded" in view and "CHANGED" not in view
     assert "setup_sql" in s.question_payload()
 
 
@@ -168,7 +182,7 @@ def test_question_payload_and_workspace_view():
     s.latest_code, s.code_language = "SELECT 1", "sql"
     s.latest_whiteboard = "Box 'API' -> Box 'DB'"
     view = s.workspace_view()
-    assert "EDITOR (sql):\nSELECT 1" in view and "Box 'API'" in view
+    assert "EDITOR (sql):\n  1 | SELECT 1" in view and "Box 'API'" in view
     s.current = 1
     assert s.question_payload()["workspace"] == "none"  # old plan defaults
     s.current = 2

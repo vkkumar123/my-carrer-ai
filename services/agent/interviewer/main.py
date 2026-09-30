@@ -1,11 +1,12 @@
 """LiveKit voice agent that runs one interview round.
 
-Pipeline: candidate mic -> Silero VAD + turn detector -> Deepgram STT -> Claude (fast model)
--> Deepgram TTS -> candidate speakers.
+Pipeline: candidate mic -> Silero VAD + turn detector -> speech-to-text (Sarvam or Deepgram)
+-> turn policy (should the interviewer speak at all?) -> Claude (fast model) -> text-to-speech
+-> candidate speakers.
 
 Data messages (LiveKit, JSON):
-- browser -> agent: "proctor" (integrity events), "code" and "whiteboard" (live workspace),
-  "sync" (browser (re)joined, resend the current question)
+- browser -> agent: "proctor" (integrity events), "code", "whiteboard" and "run" (live
+  workspace), "sync" (browser (re)joined, resend the current question)
 - agent -> browser: "question" (problem panel content for the active question)
 """
 
@@ -13,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import time
 import urllib.request
 from typing import Any
@@ -44,7 +46,9 @@ from livekit.plugins import anthropic, deepgram, sarvam, silero
 
 from interviewer import api_client
 from interviewer.prompts import build_instructions, greeting, phase_note
+from interviewer.silence import WAIT, drop_wait
 from interviewer.state import InterviewState, Phase, ProctorMonitor, speaks_hindi
+from interviewer.turns import TurnPolicy
 
 load_dotenv()
 log = logging.getLogger("interviewer")
@@ -104,16 +108,20 @@ class Interviewer(Agent):
         job: JobContext,
         name: str,
         tts: Any,
+        on_silent_turn: Any,
     ) -> None:
         self._base_instructions = build_instructions(ctx_data, name)
         super().__init__(instructions=self._base_instructions)
         self.ctx_data = ctx_data
         self.state = state
         self.proctor = ProctorMonitor()
+        self.turns = TurnPolicy()
         self.name = name
         self._job = job
         self._tts = tts
         self._tts_language = "en-IN"
+        self._hinglish = ctx_data.get("language") == "hinglish"
+        self._on_silent_turn = on_silent_turn
 
     async def on_enter(self) -> None:
         # Speak a fixed greeting straight away instead of waiting for the LLM, then show the
@@ -128,15 +136,33 @@ class Interviewer(Agent):
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ) -> None:
-        # While paused for a proctoring issue, don't carry on the interview.
-        if self.proctor.paused_for is not None or self.state.ended:
+        text = new_message.text_content or ""
+        # Paused for a proctoring issue, or the candidate is working / thinking aloud: stay
+        # silent, like a real interviewer. Their words still go into the history.
+        if (
+            self.proctor.paused_for is not None
+            or self.state.ended
+            or not self.turns.should_reply(text)
+        ):
+            await self._keep_silently(new_message)
             raise StopResponse()
-        # Follow the candidate's language: Sarvam's voice needs to know Hindi vs English.
-        if isinstance(self._tts, sarvam.TTS):
-            wanted = "hi-IN" if speaks_hindi(new_message.text_content or "") else "en-IN"
+        # Hindi + English interviews: the voice follows the language the candidate is using.
+        if self._hinglish and isinstance(self._tts, sarvam.TTS):
+            wanted = "hi-IN" if speaks_hindi(text) else "en-IN"
             if wanted != self._tts_language:
                 self._tts.update_options(target_language_code=wanted)
                 self._tts_language = wanted
+
+    async def _keep_silently(self, message: llm.ChatMessage) -> None:
+        """LiveKit drops a turn we don't reply to; keep it in the history and transcript."""
+        ctx = self.chat_ctx.copy()
+        ctx.items.append(message)
+        await self.update_chat_ctx(ctx)
+        self._on_silent_turn(message)
+
+    def llm_node(self, chat_ctx, tools, model_settings):  # type: ignore[override]
+        # The model may choose silence by replying "<wait>"; never speak that.
+        return drop_wait(Agent.default.llm_node(self, chat_ctx, tools, model_settings))
 
     def apply_phase(self, phase: Phase) -> None:
         note = phase_note(phase.value, self.state.remaining_min())
@@ -256,11 +282,12 @@ async def entrypoint(ctx: JobContext) -> None:
     )
     transcript: list[dict[str, Any]] = []
     voice = VOICES.get(ctx_data.get("voice") or "female", VOICES["female"])
+    language = ctx_data.get("language") or "english"
     tts = _make_tts(voice)
 
     session = AgentSession(
         vad=ctx.proc.userdata["vad"],
-        stt=_make_stt(ctx_data),
+        stt=_make_stt(ctx_data, language),
         llm=anthropic.LLM(model=LLM_MODEL, caching="ephemeral", max_tokens=400),
         tts=tts,
         turn_handling=_turn_handling(),
@@ -268,26 +295,41 @@ async def entrypoint(ctx: JobContext) -> None:
         user_away_timeout=60.0 if ctx_data["type"] in QUIET_WORK_TYPES else 30.0,
         max_tool_steps=4,
     )
-    agent = Interviewer(ctx_data, state, ctx, name=voice["name"], tts=tts)
+    agent = Interviewer(
+        ctx_data,
+        state,
+        ctx,
+        name=voice["name"],
+        tts=tts,
+        on_silent_turn=lambda m: _record(m, time.time()),
+    )
+
+    def _record(item: llm.ChatMessage, at: float) -> None:
+        text = (item.text_content or "").replace(WAIT, "").strip()
+        if not text:
+            return
+        role = "candidate" if item.role == "user" else "interviewer"
+        transcript.append({"role": role, "text": text, "at": at})
+        if role == "interviewer":
+            agent.turns.note_interviewer_said(text)
 
     @session.on("conversation_item_added")
     def _on_item(ev: ConversationItemAddedEvent) -> None:
         item = ev.item
-        if not isinstance(item, llm.ChatMessage) or item.role not in ("user", "assistant"):
-            return
-        text = (item.text_content or "").strip()
-        if text:
-            role = "candidate" if item.role == "user" else "interviewer"
-            transcript.append({"role": role, "text": text, "at": ev.created_at})
+        if isinstance(item, llm.ChatMessage) and item.role in ("user", "assistant"):
+            _record(item, ev.created_at)
 
     @session.on("user_state_changed")
     def _on_user_state(ev: UserStateChangedEvent) -> None:
-        if ev.new_state == "away" and not state.ended and agent.proctor.paused_for is None:
+        if ev.new_state != "away" or state.ended or agent.proctor.paused_for is not None:
+            return
+        # One short check-in after a long silence, never a stream of nudges.
+        if agent.turns.should_check_in():
             session.generate_reply(
-                instructions="The candidate has been quiet for a while. Check in briefly: if "
-                "they're working in the editor or whiteboard, call view_candidate_workspace "
-                "first and ask how it's going; otherwise tell them to take their time or "
-                "offer to rephrase."
+                instructions="The candidate has been silent for a while. Check in once, in one "
+                'short sentence, like a real interviewer: e.g. "How\'s it going?" or "Want to '
+                "talk me through where you are?\" Don't give hints and don't repeat the "
+                "question unless they ask."
             )
 
     def _on_data(packet: rtc.DataPacket) -> None:
@@ -296,16 +338,19 @@ async def entrypoint(ctx: JobContext) -> None:
         except (UnicodeDecodeError, json.JSONDecodeError):
             return
         if packet.topic == "code":
-            state.latest_code = str(data.get("code", ""))[:50_000]
+            code = str(data.get("code", ""))[:50_000]
+            if code != (state.latest_code or ""):
+                agent.turns.note_workspace_activity()
+            state.latest_code = code
             state.code_language = data.get("language")
         elif packet.topic == "whiteboard":
-            state.latest_whiteboard = str(data.get("summary", ""))[:20_000]
+            summary = str(data.get("summary", ""))[:20_000]
+            if summary != (state.latest_whiteboard or ""):
+                agent.turns.note_workspace_activity()
+            state.latest_whiteboard = summary
         elif packet.topic == "run":
-            state.last_run = {
-                "language": str(data.get("language", "")),
-                "output": str(data.get("output", ""))[:4000],
-                "error": str(data.get("error") or "")[:2000] or None,
-            }
+            agent.turns.note_workspace_activity()
+            state.record_run(data)
         elif packet.topic == "sync":
             asyncio.create_task(publish_question(ctx.room, state))
         elif packet.topic == "proctor" and not state.ended:
@@ -382,10 +427,13 @@ async def _cancel(task: asyncio.Task) -> None:
     task.cancel()
 
 
-def _make_stt(ctx_data: dict[str, Any]) -> Any:
+def _make_stt(ctx_data: dict[str, Any], language: str = "english") -> Any:
     if VOICE_PROVIDER == "sarvam":
-        # "unknown" auto-detects the language; codemix keeps Hinglish as spoken.
-        return sarvam.STT(model=SARVAM_STT_MODEL, language="unknown", mode="codemix")
+        # The candidate picks the language in the lobby. Never auto-detect: per-sentence
+        # detection sometimes picks the wrong Indian language (random Gujarati/Kannada words).
+        if language == "hinglish":
+            return sarvam.STT(model=SARVAM_STT_MODEL, language="hi-IN", mode="codemix")
+        return sarvam.STT(model=SARVAM_STT_MODEL, language="en-IN", mode="transcribe")
     keyterms = _keyterms(ctx_data)
     return deepgram.STT(
         model=DEEPGRAM_STT_MODEL,
@@ -419,5 +467,17 @@ def _keyterms(ctx_data: dict[str, Any]) -> list[str]:
     return list(seen)[:80]
 
 
+def _missing_keys() -> list[str]:
+    needed = ["ANTHROPIC_API_KEY"]
+    needed.append("SARVAM_API_KEY" if VOICE_PROVIDER == "sarvam" else "DEEPGRAM_API_KEY")
+    return [k for k in needed if not os.environ.get(k)]
+
+
 if __name__ == "__main__":
+    # Serving interviews without keys would fail silently at the first interview.
+    if len(sys.argv) > 1 and sys.argv[1] in {"dev", "start", "console"} and _missing_keys():
+        sys.exit(
+            f"Missing {', '.join(_missing_keys())}. Add them to the .env file "
+            f"(VOICE_PROVIDER={VOICE_PROVIDER}); see .env.example."
+        )
     cli.run_app(server)

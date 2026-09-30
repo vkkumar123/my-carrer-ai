@@ -45,6 +45,7 @@ class InterviewState:
     code_language: str | None = None
     latest_whiteboard: str | None = None
     last_run: dict[str, Any] | None = None
+    run_count: int = 0
     hints_used: dict[str, int] = field(default_factory=dict)
     notes: dict[str, str] = field(default_factory=dict)
 
@@ -121,22 +122,45 @@ class InterviewState:
             "setup_sql": q.get("setup_sql", ""),
         }
 
-    def workspace_view(self) -> str:
-        """What the candidate currently has in the editor and on the whiteboard (tool result)."""
+    def record_run(self, data: dict[str, Any], now: float | None = None) -> None:
+        """The candidate pressed Run. Keep what ran, when, and what came out."""
+        self.run_count += 1
+        self.last_run = {
+            "number": self.run_count,
+            "at": time.monotonic() if now is None else now,
+            "language": str(data.get("language", "")),
+            "code": str(data.get("code", ""))[:50_000],
+            "output": str(data.get("output", ""))[:4000],
+            "error": str(data.get("error") or "")[:2000] or None,
+        }
+
+    def workspace_view(self, now: float | None = None) -> str:
+        """What the candidate has in the editor and on the whiteboard (tool result)."""
+        now = time.monotonic() if now is None else now
         parts = []
-        if self.latest_code and self.latest_code.strip():
-            parts.append(
-                f"EDITOR ({self.code_language or 'unknown language'}):\n{self.latest_code}"
+        code = self.latest_code or ""
+        if code.strip():
+            numbered = "\n".join(
+                f"{i:>3} | {line}" for i, line in enumerate(code.splitlines(), start=1)
             )
+            parts.append(f"EDITOR ({self.code_language or 'unknown language'}):\n{numbered}")
         else:
             parts.append("EDITOR: empty.")
         if self.last_run:
             r = self.last_run
-            status = "failed" if r.get("error") else "succeeded"
-            parts.append(
-                f"LAST RUN ({r.get('language', '?')}, {status}):\n"
-                f"{r.get('error') or r.get('output') or '(no output)'}"
-            )
+            age = max(0, round(now - r["at"]))
+            status = "FAILED" if r.get("error") else "succeeded"
+            changed = r.get("code", "").strip() != code.strip()
+            header = f"LATEST RUN: run #{r['number']}, {age}s ago, {status}."
+            if changed:
+                header += (
+                    " The code has CHANGED since this run, so this output does not reflect the "
+                    "current code. Don't judge the current code by it; ask them to run it again."
+                )
+            body = r.get("error") or r.get("output") or "(no output)"
+            parts.append(f"{header}\n{body}")
+        else:
+            parts.append("LATEST RUN: the candidate has not run anything yet.")
         if self.latest_whiteboard and self.latest_whiteboard.strip():
             parts.append(f"WHITEBOARD:\n{self.latest_whiteboard}")
         else:

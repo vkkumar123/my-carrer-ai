@@ -121,9 +121,9 @@ export default function NewInterview() {
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value))}
                 >
-                  {[15, 20, 30, 45].map((m) => (
+                  {[5, 15, 20, 30, 45].map((m) => (
                     <option key={m} value={m}>
-                      {m} minutes
+                      {m === 5 ? "5 minutes (quick test)" : `${m} minutes`}
                     </option>
                   ))}
                 </select>
@@ -137,11 +137,14 @@ export default function NewInterview() {
                   <input
                     className={`${inputClass} mt-1`}
                     list="companies"
-                    placeholder="e.g. Adobe"
+                    placeholder="Any company, e.g. Adobe or Zoho"
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
                     required
                   />
+                  <span className="mt-1 block text-xs text-slate-500">
+                    Pick a suggestion or type any company: we research how it interviews.
+                  </span>
                   <datalist id="companies">
                     {companies.map((c) => (
                       <option key={c.slug} value={c.name} />

@@ -16,7 +16,20 @@ export default function LoopPage() {
   const [loop, setLoop] = useState<Loop | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(() => api.getLoop(id).then(setLoop, (e) => setError(e.message)), [id]);
+  const load = useCallback(
+    () =>
+      api.getLoop(id).then(
+        (l) => {
+          setLoop(l);
+          setError(null);
+        },
+        (e) => {
+          setError(e.message);
+          setLoop(null); // stops polling a loop we can't read (e.g. signed in as someone else)
+        },
+      ),
+    [id],
+  );
 
   useEffect(() => {
     if (ready) load();
@@ -70,8 +83,9 @@ export default function LoopPage() {
           <div>
             <p className="font-medium">Your interviewers are preparing</p>
             <p className="text-sm text-slate-600">
-              Reading your resume and the JD, and planning questions for each round. This takes
-              about a minute.
+              {loop.mode === "company"
+                ? `Researching how ${loop.company} interviews, reading your resume and the JD, and planning each round. This takes 1-2 minutes.`
+                : "Planning your questions. This takes about a minute."}
             </p>
           </div>
         </Card>

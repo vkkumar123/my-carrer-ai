@@ -16,12 +16,19 @@ import {
 import type { Round } from "@/lib/types";
 
 export type Voice = "female" | "male";
+export type InterviewLanguage = "english" | "hinglish";
 
 export interface LobbyResult {
   camera: MediaStream;
   screen: MediaStream;
   voice: Voice;
+  language: InterviewLanguage;
 }
+
+const LANGUAGE_OPTIONS: { value: InterviewLanguage; label: string }[] = [
+  { value: "english", label: "English" },
+  { value: "hinglish", label: "Hindi + English" },
+];
 
 const VOICE_OPTIONS: { value: Voice; label: string }[] = [
   { value: "female", label: "Priya (female voice)" },
@@ -63,6 +70,7 @@ export function Lobby({ round, onReady }: { round: Round; onReady: (r: LobbyResu
   const [extraDisplay, setExtraDisplay] = useState<boolean | undefined>(() => hasExtraDisplay());
   const [consent, setConsent] = useState(false);
   const [voice, setVoice] = useState<Voice>("female");
+  const [language, setLanguage] = useState<InterviewLanguage>("english");
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const handedOff = useRef(false);
@@ -149,7 +157,7 @@ export function Lobby({ round, onReady }: { round: Round; onReady: (r: LobbyResu
       await document.documentElement.requestFullscreen().catch(() => undefined);
       stopStream(micStream); // LiveKit opens its own mic track
       handedOff.current = true;
-      await onReady({ camera, screen, voice });
+      await onReady({ camera, screen, voice, language });
     } catch (e) {
       handedOff.current = false;
       setError(e instanceof Error ? e.message : "Could not start the interview");
@@ -246,7 +254,26 @@ export function Lobby({ round, onReady }: { round: Round; onReady: (r: LobbyResu
                 </button>
               ))}
             </div>
-            <p className="mt-2">Indian English accent. You can answer in English, Hindi or both.</p>
+            <p className="mt-3 font-medium text-slate-800">Interview language</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {LANGUAGE_OPTIONS.map((l) => (
+                <button
+                  key={l.value}
+                  type="button"
+                  onClick={() => setLanguage(l.value)}
+                  className={`rounded-lg px-3 py-1.5 text-sm ring-1 ${
+                    language === l.value ? "bg-indigo-50 text-indigo-800 ring-indigo-400" : "ring-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2">
+              {language === "english"
+                ? "Indian English accent. Speak in English for the most accurate transcript."
+                : "Speak Hindi, English or a mix; the interviewer follows your language."}
+            </p>
           </Row>
 
           <Row status={consent ? "ok" : "pending"} title="Consent">
